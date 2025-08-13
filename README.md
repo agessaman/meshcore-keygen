@@ -1,15 +1,17 @@
 # MeshCore Ed25519 Vanity Key Generator
 
-A high-performance vanity key generator for MeshCore nodes that creates Ed25519 keypairs with custom patterns. This tool generates MeshCore-compatible Ed25519 keys with various vanity patterns for personalized node identification.
+A vanity key generator for MeshCore nodes that creates Ed25519 keypairs with custom patterns. This tool generates MeshCore-compatible Ed25519 keys with various vanity patterns for personalized node identification.
 
 ## Features
 
 - **MeshCore-Compatible**: Generates Ed25519 keys in the exact format MeshCore expects
 - **Multiple Vanity Modes**: Support for various pattern matching modes
-- **High Performance**: Multi-processor support with optimized batch processing
+- **Multi-Processing**: Multi-processor support with batch processing
 - **Health Monitoring**: Automatic performance monitoring and worker restart
 - **Watchlist Support**: Monitor for additional patterns while searching
 - **Flexible Output**: Save keys in text or JSON format for MeshCore app import
+- **Verbose Mode**: Control output detail level with `--verbose` option
+- **Memory Management**: Configurable garbage collection and memory monitoring
 
 ## Installation
 
@@ -49,6 +51,10 @@ python meshcore_keygen.py --keys 100  # 100 million keys
 
 # Run for specific time
 python meshcore_keygen.py --time 2    # 2 hours
+
+# Enable verbose output for detailed progress
+python meshcore_keygen.py --verbose   # Show per-worker details
+python meshcore_keygen.py -v          # Short form for verbose mode
 ```
 
 ### Vanity Pattern Modes
@@ -109,6 +115,14 @@ Enable or disable health monitoring:
 ```bash
 python meshcore_keygen.py --health-check     # Enable (default)
 python meshcore_keygen.py --no-health-check  # Disable
+```
+
+#### Verbose Output
+Control the level of output detail:
+```bash
+python meshcore_keygen.py --verbose          # Enable verbose mode (per-worker details)
+python meshcore_keygen.py -v                 # Short form for verbose mode
+# Default: Clean output with consolidated progress updates
 ```
 
 ### Watchlist Feature
@@ -207,8 +221,35 @@ python meshcore_keygen.py --first-two F8 --watchlist my_patterns.txt
 ```
 This will search for keys starting with "F8" while also monitoring patterns in `my_patterns.txt`.
 
+### Example 6: Verbose Mode for Debugging
+```bash
+python meshcore_keygen.py --vanity-6 --verbose
+```
+This will search for 6-char vanity keys with detailed per-worker progress and health monitoring information.
+
+### Example 7: Clean Output Mode (Default)
+```bash
+python meshcore_keygen.py --first-two F8
+```
+This will search for keys starting with "F8" with clean, consolidated progress updates every 5 seconds.
+
 ## Output
 
+### Default Mode (Clean Output)
+- **Consolidated progress updates** every 5 seconds showing total attempts, rate, and elapsed time
+- **Key finds reported immediately** when discovered
+- **Watchlist matches reported immediately** when found
+- **Minimal output** for focused operation
+
+### Verbose Mode (`--verbose` or `-v`)
+- **Per-worker progress updates** with individual rates and ETAs
+- **Health monitoring details** including memory/CPU usage
+- **Batch completion reports** for each worker
+- **Performance degradation warnings**
+- **Worker restart notifications**
+- **Garbage collection information**
+
+### Key Discovery
 When a matching key is found, the script will:
 
 1. Display the key information
@@ -217,6 +258,21 @@ When a matching key is found, the script will:
 4. Show the MeshCore node ID
 
 Example output:
+
+**Default Mode Progress:**
+```
+Progress: 15,234,567 total attempts | 6,688 keys/sec | 2,278.5s elapsed
+```
+
+**Verbose Mode Progress:**
+```
+Worker 0: 3,234,567 attempts | 6,688 keys/sec | 483.7s | ETA: 2.1h
+Worker 1: 3,245,678 attempts | 6,712 keys/sec | 483.7s | ETA: 2.1h
+Worker 2: 3,256,789 attempts | 6,745 keys/sec | 483.7s | ETA: 2.0h
+Worker 3: 3,267,890 attempts | 6,678 keys/sec | 483.7s | ETA: 2.1h
+```
+
+**Key Discovery (Both Modes):**
 ```
 SUCCESS! Found matching Ed25519 key!
 Total time: 45.2s (0.8m)
@@ -265,14 +321,15 @@ The script uses the correct Ed25519 algorithm that MeshCore expects:
 
 ### Performance
 - **Multi-processing**: Automatically detects optimal number of CPU cores
-- **Batch Processing**: Configurable batch sizes for efficient resource usage
+- **Batch Processing**: Configurable batch sizes for resource usage
 - **Health Monitoring**: Automatic worker restart on performance degradation
-- **Memory Management**: Garbage collection optimization
+- **Memory Management**: Configurable garbage collection (every 2 minutes) and memory monitoring
+- **Output Control**: Verbose mode for debugging, clean mode for standard use
 
 ## System Requirements
 
 - **CPU**: Multi-core processor recommended
-- **Memory**: 2GB+ RAM recommended for high-performance operation
+- **Memory**: 2GB+ RAM recommended
 - **Storage**: Minimal disk space for key files
 - **OS**: Windows, macOS, or Linux
 
@@ -287,10 +344,21 @@ The script uses the correct Ed25519 algorithm that MeshCore expects:
 2. **Performance issues**
    - Try reducing batch size: `--batch-size 500K`
    - Disable health monitoring: `--no-health-check`
+   - Use clean output mode (default) for better performance
 
 3. **Memory usage**
-   - The script automatically manages memory with garbage collection
+   - The script automatically manages memory with configurable garbage collection
    - Health monitoring will restart workers if memory usage is high
+   - Garbage collection frequency can be adjusted as needed
+
+4. **Too much output**
+   - Use default mode for clean output
+   - Use `--verbose` only when debugging or monitoring performance
+
+5. **Watchlist performance impact**
+   - Large watchlists can reduce performance by ~27%
+   - Consider using a smaller curated watchlist for better performance
+   - Run without watchlist for improved speed
 
 ### Getting Help
 
@@ -299,6 +367,8 @@ If you encounter issues:
 2. Try running with `--test-compatibility` to verify installation
 3. Use smaller batch sizes if experiencing performance issues
 4. Ensure you have sufficient system resources
+5. Use `--verbose` mode to debug performance or health monitoring issues
+6. Check the troubleshooting section above for common solutions
 
 ## Security Notes
 
@@ -317,4 +387,4 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 ---
 
-**Note**: This tool generates vanity keys for MeshCore nodes. The generated keys are cryptographically secure Ed25519 keypairs that are compatible with the MeshCore protocol.
+**Note**: This tool generates vanity keys for MeshCore nodes. The generated keys are Ed25519 keypairs that are compatible with the MeshCore protocol.
