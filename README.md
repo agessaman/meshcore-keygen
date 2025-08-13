@@ -6,7 +6,8 @@ A key generator for MeshCore nodes that creates Ed25519 keypairs with custom pat
 
 - **MeshCore-Compatible**: Generates Ed25519 keys in the exact format MeshCore expects
 - **Multiple Pattern Modes**: Support for various cosmetic pattern matching modes
-- **Multi-Processing**: Multi-processor support with batch processing
+- **Multi-Processing**: Multi-processor support with smart thread management (75% of cores on Linux/AMD64)
+- **Manual Worker Control**: Override auto-detection with `--workers` option
 - **Health Monitoring**: Automatic performance monitoring and worker restart
 - **Watchlist Support**: Monitor for additional patterns while searching
 - **Flexible Output**: Save keys in text or JSON format for MeshCore app import
@@ -115,6 +116,14 @@ python meshcore_keygen.py --four-char --first-two F8
 ```
 
 ### Performance Options
+
+#### Worker Processes
+Control the number of worker processes:
+```bash
+python meshcore_keygen.py --workers 4        # Use 4 worker processes
+python meshcore_keygen.py --workers 8        # Use 8 worker processes
+```
+**Default**: Auto-detects optimal count (75% of available CPU cores on Linux/AMD64, performance cores on Apple Silicon, n-2 strategy on Windows/Intel Mac)
 
 #### Batch Size
 Control the batch size for worker processes:
@@ -248,6 +257,12 @@ This will search for keys starting with "ABCDEF" AND having a 4-char cosmetic pa
 python meshcore_keygen.py --pattern-6 --time 2 --health-check
 ```
 This will search for 6-char cosmetic pattern keys for 2 hours with health monitoring enabled.
+
+### Example 6b: Use Custom Number of Workers
+```bash
+python meshcore_keygen.py --prefix F8 --workers 4 --keys 1
+```
+This will search for keys starting with "F8" using 4 worker processes instead of the auto-detected optimal count.
 
 ### Example 7: Use Custom Watchlist
 ```bash

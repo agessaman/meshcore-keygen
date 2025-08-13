@@ -443,7 +443,7 @@ class SystemUtils:
         elif platform.system() == 'Darwin':
             return SystemUtils._get_macos_worker_count()
         else:
-            return mp.cpu_count()
+            return SystemUtils._get_linux_amd64_worker_count()
     
     @staticmethod
     def _get_windows_worker_count() -> int:
@@ -522,6 +522,16 @@ class SystemUtils:
             pass
         
         return max(2, mp.cpu_count() // 2 - 2)
+    
+    @staticmethod
+    def _get_linux_amd64_worker_count() -> int:
+        """Get optimal worker count for Linux/AMD64 systems."""
+        cpu_count = mp.cpu_count()
+        # Use 75% of available threads, rounded to nearest integer
+        recommended_workers = max(2, round(cpu_count * 0.75))
+        print(f"Linux/AMD64 detected: {cpu_count} logical cores")
+        print(f"Using {recommended_workers} workers (75% of available cores)")
+        return recommended_workers
 
 
 class HealthMonitor:
@@ -1090,6 +1100,8 @@ class ArgumentParser:
                           help='Max runtime (e.g., 2 or 2:30)')
         parser.add_argument('--batch-size', type=ArgumentParser._parse_batch_size,
                           help='Batch size for worker processes (e.g., 500K, 1M, 2M)')
+        parser.add_argument('--workers', type=int,
+                          help='Number of worker processes to use (default: auto-detect optimal count)')
         parser.add_argument('--watchlist', type=str,
                           help='Path to watchlist file with patterns to monitor (auto-loads watchlist.txt if not specified)')
         parser.add_argument('--first-two', type=str,
@@ -1190,6 +1202,8 @@ Examples:
   python meshcore_keygen.py --time 2:30        # 2 hours 30 minutes
   python meshcore_keygen.py --batch-size 500K  # 500K keys per batch
   python meshcore_keygen.py --batch-size 2M    # 2M keys per batch
+  python meshcore_keygen.py --workers 4        # Use 4 worker processes
+  python meshcore_keygen.py --workers 8        # Use 8 worker processes
   python meshcore_keygen.py --watchlist patterns.txt  # Monitor specific patterns file
   python meshcore_keygen.py --first-two F8     # Keys starting with F8 (auto-loads watchlist.txt)
   python meshcore_keygen.py --first-two F8 --simple  # Simple mode
@@ -1966,7 +1980,14 @@ def main():
             print("Error: --prefix must be a valid hex string (e.g., F8A1, 1234)")
             return
     
-
+    if args.workers is not None:
+        # Validate workers argument
+        if args.workers < 1:
+            print("Error: --workers must be at least 1.")
+            return
+        if args.workers > mp.cpu_count():
+            print(f"Error: --workers cannot exceed the number of available CPU cores ({mp.cpu_count()}).")
+            return
     
     # Check for conflicting modes (allow combining --prefix with --pattern-*)
     pattern_modes = [args.simple, args.four_char, args.pattern_8, args.pattern_4, args.pattern_2, args.pattern_6]
@@ -2131,11 +2152,15 @@ def create_config_from_args(args) -> VanityConfig:
         elif args.pattern_8:
             vanity_length = 8
     
+    # Get number of workers (use provided value or auto-detect)
+    num_workers = args.workers if args.workers else None
+    
     # Calculate max_iterations from keys if specified
     max_iterations = None
     if args.keys:
-        num_workers = SystemUtils.get_optimal_worker_count()
-        max_iterations = args.keys // num_workers
+        # Use provided workers or auto-detect for calculation
+        workers_for_calc = num_workers or SystemUtils.get_optimal_worker_count()
+        max_iterations = args.keys // workers_for_calc
     
     # Set batch size (default 100K if not specified)
     batch_size = args.batch_size if args.batch_size else 100000
@@ -2158,6 +2183,7 @@ def create_config_from_args(args) -> VanityConfig:
         vanity_length=vanity_length,
         max_iterations=max_iterations,
         max_time=args.time,
+        num_workers=num_workers,
         batch_size=batch_size,
         watchlist_file=watchlist_file,
         health_check=args.health_check, # Pass health_check argument
