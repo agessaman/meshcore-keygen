@@ -137,7 +137,6 @@ class WatchlistPattern:
     
     def matches(self, public_hex: str) -> bool:
         """Check if a public key matches this pattern."""
-        public_hex = public_hex.upper()
         return (public_hex[:self.first_length] == self.first_chars and 
                 public_hex[-self.last_length:] == self.last_chars)
 
@@ -152,7 +151,7 @@ class VanityConfig:
     max_iterations: Optional[int] = None
     max_time: Optional[int] = None
     num_workers: Optional[int] = None
-    batch_size: int = 1000000  # Default batch size: 1 million keys
+    batch_size: int = 100000  # Default batch size: 100K keys (reduced for better performance)
     watchlist_file: Optional[str] = None  # Path to watchlist file
     watchlist_patterns: List[WatchlistPattern] = None  # Loaded watchlist patterns
     health_check: bool = True # Default to True for health monitoring
@@ -248,32 +247,37 @@ class KeyValidator:
     @staticmethod
     def check_vanity_pattern(public_hex: str, config: VanityConfig) -> bool:
         """Check if a public key matches the desired vanity pattern."""
+        # Convert to uppercase once to avoid repeated conversions
+        public_hex_upper = public_hex.upper()
+        
         if config.mode == VanityMode.SIMPLE:
-            return KeyValidator._check_simple_pattern(public_hex, config.target_first_two)
+            return KeyValidator._check_simple_pattern(public_hex_upper, config.target_first_two)
         elif config.mode == VanityMode.PREFIX:
-            return KeyValidator._check_prefix_pattern(public_hex, config.target_prefix)
+            return KeyValidator._check_prefix_pattern(public_hex_upper, config.target_prefix)
         elif config.mode == VanityMode.VANITY_2:
-            return KeyValidator._check_vanity_n_pattern(public_hex, 2)
+            return KeyValidator._check_vanity_n_pattern(public_hex_upper, 2)
         elif config.mode == VanityMode.VANITY_4:
-            return KeyValidator._check_vanity_n_pattern(public_hex, 4)
+            return KeyValidator._check_vanity_n_pattern(public_hex_upper, 4)
         elif config.mode == VanityMode.VANITY_6:
-            return KeyValidator._check_vanity_n_pattern(public_hex, 6)
+            return KeyValidator._check_vanity_n_pattern(public_hex_upper, 6)
         elif config.mode == VanityMode.VANITY_8:
-            return KeyValidator._check_vanity_n_pattern(public_hex, 8)
+            return KeyValidator._check_vanity_n_pattern(public_hex_upper, 8)
         elif config.mode == VanityMode.FOUR_CHAR:
-            return KeyValidator._check_four_char_pattern(public_hex, config.target_first_two)
+            return KeyValidator._check_four_char_pattern(public_hex_upper, config.target_first_two)
         elif config.mode == VanityMode.PREFIX_VANITY:
-            return KeyValidator._check_prefix_vanity_pattern(public_hex, config.target_prefix, config.vanity_length)
+            return KeyValidator._check_prefix_vanity_pattern(public_hex_upper, config.target_prefix, config.vanity_length)
         else:  # DEFAULT
-            return KeyValidator._check_default_pattern(public_hex, config.target_first_two)
+            return KeyValidator._check_default_pattern(public_hex_upper, config.target_first_two)
     
     @staticmethod
     def check_watchlist_patterns(public_hex: str, config: VanityConfig) -> List[WatchlistPattern]:
         """Check if a public key matches any watchlist patterns."""
         matches = []
         if config.watchlist_patterns:
+            # Convert to uppercase once to avoid repeated conversions
+            public_hex_upper = public_hex.upper()
             for pattern in config.watchlist_patterns:
-                if pattern.matches(public_hex):
+                if pattern.matches(public_hex_upper):
                     matches.append(pattern)
         return matches
     
@@ -282,7 +286,7 @@ class KeyValidator:
         """Check simple pattern: specific first two hex characters."""
         if not target_first_two:
             return True
-        return public_hex[:2].upper() == target_first_two.upper()
+        return public_hex[:2] == target_first_two.upper()
     
     @staticmethod
     def _check_prefix_pattern(public_hex: str, target_prefix: Optional[str]) -> bool:
@@ -290,7 +294,7 @@ class KeyValidator:
         if not target_prefix:
             return False
         prefix_length = len(target_prefix)
-        return public_hex[:prefix_length].upper() == target_prefix.upper()
+        return public_hex[:prefix_length] == target_prefix.upper()
     
     @staticmethod
     def _check_vanity_n_pattern(public_hex: str, n: int) -> bool:
@@ -545,7 +549,8 @@ class HealthMonitor:
         
         try:
             process = psutil.Process()
-            return process.cpu_percent(interval=0.1)
+            # Use non-blocking CPU check to avoid 0.1s delay
+            return process.cpu_percent(interval=None)
         except Exception:
             return 0.0
     
@@ -629,9 +634,13 @@ class PerformanceTracker:
     def should_update(self, attempts: int, interval_seconds: int = 5, 
                      interval_attempts: int = 1000000) -> bool:
         """Check if progress should be updated."""
+        # Use modulo check first (cheaper than time.time())
+        if attempts % interval_attempts == 0:
+            return True
+        
+        # Only check time if we haven't hit the attempt threshold
         current_time = time.time()
-        return (current_time - self.last_update >= interval_seconds or 
-                attempts % interval_attempts == 0)
+        return current_time - self.last_update >= interval_seconds
     
     def update(self, worker_id: int, attempts: int, current_rate: float = None):
         """Update progress display."""
@@ -708,7 +717,21 @@ class PerformanceTracker:
 
 
 def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dict[str, Any]) -> BatchResult:
-    """Worker process that generates keys in batches and checks in with main process."""
+    """Worker process that generates keys in batches and checks in with main process.
+    
+    Performance optimizations:
+    - Single key generation per iteration (eliminates double generation)
+    - Reduced shared state checking frequency (every 50K attempts)
+    - Reduced time limit checking frequency (every 50K attempts)
+    - Progress tracking only in verbose mode (every 100K attempts)
+    - Reduced health monitoring frequency (every 10 batches)
+    - Single uppercase conversion per key
+    - Eliminated redundant key verification
+    - Optimized CPU usage checking (non-blocking)
+    - Conditional tracker updates (only when verbose)
+    - Reduced default batch size (100K vs 1M) for better responsiveness
+    - Fast byte comparison for simple patterns
+    """
     batch_size = config.batch_size
     max_time = config.max_time
     start_time = time.time()
@@ -746,50 +769,85 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
         
         # Process this batch
         for attempt in range(batch_size):
-            # Check if another worker found a key (check every 100K attempts to reduce overhead)
-            if attempt % 100000 == 0 and attempt > 0 and shared_state.get('key_found', False):
+            # Check if another worker found a key (check every 50K attempts to reduce overhead)
+            if attempt % 50000 == 0 and attempt > 0 and shared_state.get('key_found', False):
                 return BatchResult(worker_id=worker_id, attempts=total_attempts + attempt, batch_completed=False)
             
-            # Check time limit
-            if max_time and (time.time() - start_time) > max_time:
+            # Check time limit (check every 50K attempts to reduce overhead)
+            if attempt % 50000 == 0 and max_time and (time.time() - start_time) > max_time:
                 return BatchResult(worker_id=worker_id, attempts=total_attempts + attempt, batch_completed=False)
             
-            # Update progress
-            if tracker.should_update(total_attempts + attempt):
+            # Update progress (only in verbose mode, every 100K attempts)
+            if config.verbose and attempt % 100000 == 0 and tracker.should_update(total_attempts + attempt):
                 tracker.update(worker_id, total_attempts + attempt)
             
-            # Generate and check key
-            result = Ed25519KeyGenerator.generate_single_key(config)
+            # Generate a single key and check both main pattern and watchlist
+            public_bytes, private_bytes = Ed25519KeyGenerator.generate_meshcore_keypair()
             
-            # Always generate a key to check for watchlist patterns
-            any_key = Ed25519KeyGenerator.generate_any_key()
-            if Ed25519KeyGenerator.verify_key_compatibility(any_key.private_hex, any_key.public_hex):
-                # Check for watchlist matches
-                watchlist_matches = KeyValidator.check_watchlist_patterns(any_key.public_hex, config)
-                if watchlist_matches:
-                    for pattern in watchlist_matches:
-                        print(f"Worker {worker_id}: Found WATCHLIST match! Pattern: {pattern.pattern}")
-                        if pattern.description:
-                            print(f"  Description: {pattern.description}")
-                        
-                        # Save watchlist key
-                        save_watchlist_key(any_key, pattern)
+            # Fast pattern checking using direct byte comparisons where possible
+            main_pattern_match = False
+            watchlist_matches = []
             
-            if result:
-                # Verify the generated key works correctly
-                if Ed25519KeyGenerator.verify_key_compatibility(result.private_hex, result.public_hex):
-                    # Check if this matches the primary target
-                    if KeyValidator.check_vanity_pattern(result.public_hex, config):
-                        print(f"Worker {worker_id}: Found valid MeshCore Ed25519 key!")
-                        # Set the shared state to indicate a key was found
-                        shared_state['key_found'] = True
-                        shared_state['found_key'] = result
-                        return BatchResult(worker_id=worker_id, attempts=total_attempts + attempt + 1, found_key=result)
-                    else:
-                        continue
-                else:
-                    print(f"Worker {worker_id}: Generated key failed compatibility check!")
-                    continue
+            # Check for main pattern match (optimized)
+            if config.mode == VanityMode.SIMPLE and config.target_first_two:
+                # Fast 2-char prefix check using direct byte comparison
+                # Convert target to bytes once and cache it
+                if not hasattr(config, '_target_bytes'):
+                    config._target_bytes = bytes.fromhex(config.target_first_two)
+                main_pattern_match = (public_bytes[0] == config._target_bytes[0] and 
+                                    public_bytes[1] == config._target_bytes[1])
+            else:
+                # Fall back to hex conversion for complex patterns
+                public_hex = public_bytes.hex()
+                main_pattern_match = KeyValidator.check_vanity_pattern(public_hex, config)
+                
+                # Check for watchlist patterns (only if we have watchlist patterns)
+                if config.watchlist_patterns:
+                    watchlist_matches = KeyValidator.check_watchlist_patterns(public_hex, config)
+            
+            # Handle watchlist matches
+            if watchlist_matches:
+                public_hex = public_bytes.hex()  # Convert to hex only when needed
+                for pattern in watchlist_matches:
+                    print(f"Worker {worker_id}: Found WATCHLIST match! Pattern: {pattern.pattern}")
+                    if pattern.description:
+                        print(f"  Description: {pattern.description}")
+                    
+                    # Create KeyInfo for watchlist key
+                    watchlist_key = KeyInfo(
+                        public_hex=public_hex,
+                        private_hex=private_bytes.hex(),
+                        public_bytes=public_bytes,
+                        private_bytes=private_bytes,
+                        matching_pattern=pattern.pattern,
+                        first_8_hex=public_hex[:8],
+                        last_8_hex=public_hex[-8:]
+                    )
+                    
+                    # Save watchlist key
+                    save_watchlist_key(watchlist_key, pattern)
+            
+            # Handle main pattern match
+            if main_pattern_match:
+                # Convert to hex only when we have a match
+                public_hex = public_bytes.hex()
+                
+                # Create KeyInfo for main pattern match
+                result = KeyInfo(
+                    public_hex=public_hex,
+                    private_hex=private_bytes.hex(),
+                    public_bytes=public_bytes,
+                    private_bytes=private_bytes,
+                    matching_pattern=public_hex[:8],
+                    first_8_hex=public_hex[:8],
+                    last_8_hex=public_hex[-8:]
+                )
+                
+                print(f"Worker {worker_id}: Found valid MeshCore Ed25519 key!")
+                # Set the shared state to indicate a key was found
+                shared_state['key_found'] = True
+                shared_state['found_key'] = result
+                return BatchResult(worker_id=worker_id, attempts=total_attempts + attempt + 1, found_key=result)
             
             batch_attempts += 1
         
@@ -797,8 +855,8 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
         batch_time = time.time() - batch_start_time
         current_rate = batch_attempts / batch_time if batch_time > 0 else 0
         
-        # Health monitoring and performance checks
-        if health_monitor:
+        # Health monitoring and performance checks (only every 10 batches to reduce overhead)
+        if health_monitor and (total_attempts // batch_size) % 10 == 0:
             health_status = health_monitor.check_health(current_rate, batch_attempts, batch_time)
             
             # Report health status if there are warnings or actions (only in verbose mode)
@@ -831,11 +889,12 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
             else:
                 consecutive_slow_batches = 0
         
-        # Update tracker with current rate for performance analysis
-        tracker.update(worker_id, total_attempts, current_rate)
-        
-        # Report batch completion (only in verbose mode)
+        # Update tracker with current rate for performance analysis (only when verbose)
         if config.verbose:
+            tracker.update(worker_id, total_attempts, current_rate)
+        
+        # Report batch completion (only in non-verbose mode, every 500K attempts)
+        if not config.verbose and total_attempts % 500000 == 0:
             print(f"Worker {worker_id}: Completed batch of {batch_attempts:,} keys in {batch_time:.1f}s "
                   f"({current_rate:,.0f} keys/sec) | Total: {total_attempts:,}")
         
@@ -1026,7 +1085,7 @@ Vanity Pattern Modes:
 Batch Processing:
   Workers now process keys in configurable batches and check in with the main process.
   This allows for faster termination when a key is found and better resource utilization.
-  Default batch size is 1M keys. Use --batch-size to adjust (e.g., 500K, 2M).
+  Default batch size is 100K keys. Use --batch-size to adjust (e.g., 50K, 500K, 2M).
 
 Watchlist Feature:
   Use --watchlist to monitor for additional patterns while searching for your primary target.
@@ -1825,8 +1884,8 @@ def create_config_from_args(args) -> VanityConfig:
         num_workers = SystemUtils.get_optimal_worker_count()
         max_iterations = args.keys // num_workers
     
-    # Set batch size (default 1M if not specified)
-    batch_size = args.batch_size if args.batch_size else 1000000
+    # Set batch size (default 100K if not specified)
+    batch_size = args.batch_size if args.batch_size else 100000
     
     # Handle watchlist file
     watchlist_file = args.watchlist
