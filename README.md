@@ -10,6 +10,7 @@ A vanity key generator for MeshCore nodes that creates Ed25519 keypairs with cus
 - **Health Monitoring**: Automatic performance monitoring and worker restart
 - **Watchlist Support**: Monitor for additional patterns while searching
 - **Flexible Output**: Save keys in text or JSON format for MeshCore app import
+- **Progress Bars**: Visual progress tracking with tqdm (when not in verbose mode)
 - **Verbose Mode**: Control output detail level with `--verbose` option
 - **Memory Management**: Configurable garbage collection and memory monitoring
 
@@ -26,6 +27,7 @@ Install the required packages:
 
 ```bash
 pip install PyNaCl
+pip install tqdm    # Required for progress bars
 pip install psutil  # Optional, for enhanced health monitoring
 ```
 
@@ -53,7 +55,7 @@ python meshcore_keygen.py --keys 100  # 100 million keys
 python meshcore_keygen.py --time 2    # 2 hours
 
 # Enable verbose output for detailed progress
-python meshcore_keygen.py --verbose   # Show per-worker details
+python meshcore_keygen.py --verbose   # Show per-worker details (disables progress bar)
 python meshcore_keygen.py -v          # Short form for verbose mode
 ```
 
@@ -117,12 +119,15 @@ python meshcore_keygen.py --health-check     # Enable (default)
 python meshcore_keygen.py --no-health-check  # Disable
 ```
 
-#### Verbose Output
-Control the level of output detail:
+#### Progress Display
+Control how progress is displayed:
 ```bash
+# Default: Progress bar with consolidated updates (when tqdm is available)
+python meshcore_keygen.py --first-two F8
+
+# Verbose mode: Detailed per-worker output (disables progress bar)
 python meshcore_keygen.py --verbose          # Enable verbose mode (per-worker details)
 python meshcore_keygen.py -v                 # Short form for verbose mode
-# Default: Clean output with consolidated progress updates
 ```
 
 ### Watchlist Feature
@@ -235,11 +240,12 @@ This will search for keys starting with "F8" with clean, consolidated progress u
 
 ## Output
 
-### Default Mode (Clean Output)
+### Default Mode (Progress Bar)
+- **Visual progress bar** showing current progress, rate, and estimated time remaining
 - **Consolidated progress updates** every 5 seconds showing total attempts, rate, and elapsed time
 - **Key finds reported immediately** when discovered
 - **Watchlist matches reported immediately** when found
-- **Minimal output** for focused operation
+- **Clean output** for focused operation
 
 ### Verbose Mode (`--verbose` or `-v`)
 - **Per-worker progress updates** with individual rates and ETAs
@@ -359,6 +365,11 @@ The script uses the correct Ed25519 algorithm that MeshCore expects:
    - Large watchlists can reduce performance by ~27%
    - Consider using a smaller curated watchlist for better performance
    - Run without watchlist for improved speed
+
+6. **Progress bar not showing**
+   - Ensure tqdm is installed: `pip install tqdm`
+   - Progress bars are disabled in verbose mode (`--verbose`)
+   - For very long searches, progress bars may be indeterminate (no total shown)
 
 ### Getting Help
 

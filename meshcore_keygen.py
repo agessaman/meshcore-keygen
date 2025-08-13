@@ -6,6 +6,7 @@ Now uses the CORRECT Ed25519 format that MeshCore actually expects.
 
 Requirements:
     pip install PyNaCl
+    pip install tqdm (required for progress bars)
     pip install psutil (optional, for health monitoring)
 
 KEY INSIGHT: MeshCore uses Ed25519 with custom scalar clamping!
@@ -47,6 +48,7 @@ Usage:
     python meshcore_keygen.py --vanity-6         # Search for 6-char vanity patterns
     python meshcore_keygen.py --health-check     # Enable health monitoring (default)
     python meshcore_keygen.py --no-health-check  # Disable health monitoring
+    python meshcore_keygen.py --verbose          # Show detailed progress (disables progress bar)
 """
 
 import os
@@ -78,6 +80,15 @@ except ImportError:
     PSUTIL_AVAILABLE = False
     print("Warning: psutil not installed. Health monitoring will be limited.")
     print("Install with: pip install psutil")
+
+# Try to import tqdm for progress bars
+try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+    print("Warning: tqdm not installed. Progress bars will be disabled.")
+    print("Install with: pip install tqdm")
 
 
 class VanityMode(Enum):
@@ -613,6 +624,116 @@ class HealthMonitor:
         return health_status
 
 
+class ProgressBar:
+    """Progress bar using tqdm for non-verbose mode."""
+    
+    def __init__(self, total_attempts: int = None, probability: float = None, time_limit: int = None, verbose: bool = False):
+        self.start_time = time.time()
+        self.verbose = verbose
+        self.probability = probability
+        self.time_limit = time_limit
+        
+        # Calculate expected attempts based on probability (50% chance of finding)
+        if probability and probability > 0:
+            self.expected_attempts = int(0.693 / probability)  # ln(2) / p for 50% chance
+        else:
+            self.expected_attempts = total_attempts
+        
+        # Initialize tqdm progress bar if available and not in verbose mode
+        self.tqdm_bar = None
+        if TQDM_AVAILABLE and not verbose:
+            if time_limit:
+                # Time-based progress bar
+                self.tqdm_bar = tqdm(
+                    total=time_limit,
+                    unit='s',
+                    unit_scale=False,  # Don't scale seconds to avoid confusion
+                    desc='Generating keys',
+                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]{postfix}'
+                )
+            elif self.expected_attempts and self.expected_attempts > 1e9:  # > 1 billion
+                # Use indeterminate progress bar for very long searches
+                self.tqdm_bar = tqdm(
+                    unit='keys',
+                    unit_scale=True,
+                    desc='Generating keys',
+                    bar_format='{l_bar}{bar}| {n_fmt} [{elapsed}, {rate_fmt}]'
+                )
+            elif self.expected_attempts:
+                # Use determinate progress bar for reasonable searches
+                self.tqdm_bar = tqdm(
+                    total=self.expected_attempts,
+                    unit='keys',
+                    unit_scale=True,
+                    desc='Generating keys',
+                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+                )
+            else:
+                # No expected attempts, use indeterminate progress
+                self.tqdm_bar = tqdm(
+                    unit='keys',
+                    unit_scale=True,
+                    desc='Generating keys',
+                    bar_format='{l_bar}{bar}| {n_fmt} [{elapsed}, {rate_fmt}]'
+                )
+    
+    def update(self, attempts: int, rate: float = None):
+        """Update the progress bar."""
+        if self.tqdm_bar is not None:
+            if self.time_limit:
+                # Time-based progress: update based on elapsed time
+                elapsed = time.time() - self.start_time
+                self.tqdm_bar.n = int(elapsed)
+                # Show keys/sec rate in postfix (not seconds/sec)
+                if rate and rate > 0:
+                    # Format keys count with M/k suffixes
+                    if attempts >= 1000000:
+                        keys_str = f'{attempts/1000000:.2f}M'
+                    elif attempts >= 1000:
+                        keys_str = f'{attempts/1000:.0f}k'
+                    else:
+                        keys_str = f'{attempts:,}'
+                    
+                    # Format rate with k suffix
+                    if rate >= 1000:
+                        rate_str = f'{rate/1000:.2f} kkeys/s'
+                    else:
+                        rate_str = f'{rate:.0f}/s'
+                    
+                    self.tqdm_bar.set_postfix_str(f'{keys_str}, {rate_str}')
+                else:
+                    # Show just keys count if no rate available
+                    if attempts >= 1000000:
+                        keys_str = f'{attempts/1000000:.2f}M'
+                    elif attempts >= 1000:
+                        keys_str = f'{attempts/1000:.0f}k'
+                    else:
+                        keys_str = f'{attempts:,}'
+                    
+                    self.tqdm_bar.set_postfix_str(keys_str)
+            else:
+                # Key-based progress: update based on attempts
+                self.tqdm_bar.n = attempts
+                if rate:
+                    self.tqdm_bar.set_postfix({'rate': f'{rate:,.0f}/s'})
+            self.tqdm_bar.refresh()
+    
+    def close(self):
+        """Close the progress bar."""
+        if self.tqdm_bar is not None:
+            try:
+                self.tqdm_bar.close()
+            except Exception:
+                pass  # Ignore errors when closing
+    
+    def write(self, message: str):
+        """Write a message without interfering with the progress bar."""
+        if self.tqdm_bar is not None:
+            self.tqdm_bar.write(message)
+        else:
+            print(message)
+
+
 class PerformanceTracker:
     """Tracks and analyzes performance metrics over time."""
     
@@ -852,6 +973,15 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
             batch_attempts += 1
         
         total_attempts += batch_attempts
+        
+        # Update shared state with progress (every batch)
+        shared_state['total_attempts'] = shared_state.get('total_attempts', 0) + batch_attempts
+        
+        # Check if we've reached the target number of keys
+        target_keys = shared_state.get('target_keys')
+        if target_keys and shared_state['total_attempts'] >= target_keys:
+            shared_state['key_found'] = True  # Signal other workers to stop
+            return BatchResult(worker_id=worker_id, attempts=total_attempts, batch_completed=False)
         batch_time = time.time() - batch_start_time
         current_rate = batch_attempts / batch_time if batch_time > 0 else 0
         
@@ -893,8 +1023,8 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
         if config.verbose:
             tracker.update(worker_id, total_attempts, current_rate)
         
-        # Report batch completion (only in non-verbose mode, every 500K attempts)
-        if not config.verbose and total_attempts % 500000 == 0:
+        # Report batch completion (only in verbose mode)
+        if config.verbose and total_attempts % 500000 == 0:
             print(f"Worker {worker_id}: Completed batch of {batch_attempts:,} keys in {batch_time:.1f}s "
                   f"({current_rate:,.0f} keys/sec) | Total: {total_attempts:,}")
         
@@ -1007,14 +1137,22 @@ class ArgumentParser:
     
     @staticmethod
     def _parse_keys(keys_str: str) -> int:
-        """Parse keys argument."""
+        """Parse keys argument.
+        
+        Examples:
+            --keys 1     -> 1,000,000 keys (1 million)
+            --keys 100   -> 100,000,000 keys (100 million)
+            --keys 1500  -> 1,500,000,000 keys (1.5 billion)
+            --keys 1b    -> 1,000,000,000 keys (1 billion)
+            --keys 0.5b  -> 500,000,000 keys (500 million)
+        """
         try:
             if keys_str.lower().endswith('b'):
                 return int(float(keys_str[:-1]) * 1000000000)
             
             keys = float(keys_str)
-            if keys <= 1000:
-                keys *= 1000000
+            # Always multiply by 1 million unless it ends with 'b'
+            keys *= 1000000
             return int(keys)
         except ValueError:
             raise argparse.ArgumentTypeError("Invalid number format")
@@ -1123,6 +1261,7 @@ class MeshCoreKeyGenerator:
             return self._run_generation(config, num_workers)
         except KeyboardInterrupt:
             print("\n\nKey generation interrupted by user.")
+            self.last_exit_reason = "Key generation was interrupted by user (Ctrl+C)."
             return None
     
     def _print_generation_info(self, config: VanityConfig, num_workers: int):
@@ -1145,6 +1284,8 @@ class MeshCoreKeyGenerator:
             shared_state = manager.dict()
             shared_state['key_found'] = False
             shared_state['found_key'] = None
+            shared_state['total_attempts'] = 0
+            shared_state['target_keys'] = config.max_iterations * num_workers if config.max_iterations else None
             
             # Global health monitoring
             global_health_monitor = None
@@ -1161,10 +1302,55 @@ class MeshCoreKeyGenerator:
             max_restarts_per_worker = 5
             worker_restarts = {}
             
+            # Initialize progress bar for non-verbose mode
+            progress_bar = None
+            if not config.verbose:
+                if config.max_time:
+                    # Time-based progress bar
+                    progress_bar = ProgressBar(time_limit=config.max_time, verbose=config.verbose)
+                elif config.max_iterations:
+                    # Key-based progress bar
+                    total_target_keys = config.max_iterations * num_workers
+                    progress_bar = ProgressBar(total_attempts=total_target_keys, verbose=config.verbose)
+                else:
+                    # Probability-based progress bar (no specific target)
+                    probability = calculate_pattern_probability(config)
+                    progress_bar = ProgressBar(probability=probability, verbose=config.verbose)
+            
             # Progress tracking for non-verbose mode
             worker_progress = {}
             last_progress_update = time.time()
-            progress_update_interval = 5  # Update progress every 5 seconds
+            progress_update_interval = 1  # Update progress every 1 second for more responsive updates
+            
+            # Flag to stop progress monitoring thread
+            stop_progress_monitor = threading.Event()
+            
+            def progress_monitor():
+                """Monitor shared state and update progress bar."""
+                while not stop_progress_monitor.is_set():
+                    if not config.verbose and progress_bar:
+                        total_attempts = shared_state.get('total_attempts', 0)
+                        elapsed = time.time() - self.start_time
+                        
+                        # Update progress bar (always update for time-based progress)
+                        rate = total_attempts / elapsed if elapsed > 0 else 0
+                        progress_bar.update(total_attempts, rate)
+                        
+                        # Check if we've reached the target number of keys
+                        target_keys = shared_state.get('target_keys')
+                        if target_keys and total_attempts >= target_keys:
+                            shared_state['key_found'] = True  # Signal workers to stop
+                            break
+                        
+                        # Check if we've reached the time limit
+                        if config.max_time and elapsed >= config.max_time:
+                            shared_state['key_found'] = True  # Signal workers to stop
+                            break
+                    time.sleep(0.5)  # Check every 0.5 seconds
+            
+            # Start progress monitoring thread
+            progress_thread = threading.Thread(target=progress_monitor, daemon=True)
+            progress_thread.start()
             
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
                 futures = []
@@ -1199,12 +1385,58 @@ class MeshCoreKeyGenerator:
                                     # Give a small delay for cancellation to take effect
                                     time.sleep(0.5)
                                     
+                                    # Stop progress monitoring and close progress bar before printing success
+                                    stop_progress_monitor.set()
+                                    if progress_bar:
+                                        progress_bar.close()
+                                    
                                     self._print_success(result.found_key, num_workers)
                                     print("Note: Other workers may continue briefly - this is normal multiprocessing behavior.")
                                     return result.found_key
                                 
+                                # Check if workers stopped due to reaching target (not finding a key)
+                                if shared_state.get('key_found', False) and not result.found_key:
+                                    # All workers have been signaled to stop due to reaching target
+                                    # Cancel remaining futures
+                                    for f in futures:
+                                        if not f.done():
+                                            f.cancel()
+                                    
+                                    # Stop progress monitoring and close progress bar
+                                    stop_progress_monitor.set()
+                                    if progress_bar:
+                                        progress_bar.close()
+                                    
+                                    # Check if we stopped due to time limit or key target
+                                    elapsed = time.time() - self.start_time
+                                    if config.max_time and elapsed >= config.max_time:
+                                        # Format time limit nicely
+                                        if config.max_time < 3600:  # Less than 1 hour
+                                            minutes = config.max_time // 60
+                                            seconds = config.max_time % 60
+                                            if minutes > 0:
+                                                time_str = f"{minutes}m {seconds}s"
+                                            else:
+                                                time_str = f"{seconds}s"
+                                        else:
+                                            time_str = f"{config.max_time/3600:.1f} hours"
+                                        
+                                        print(f"\nReached time limit of {time_str}.")
+                                        self.last_exit_reason = f"Successfully completed time limit of {time_str} without finding a match."
+                                    else:
+                                        print(f"\nReached target of {shared_state.get('target_keys', 0):,} keys.")
+                                        self.last_exit_reason = f"Successfully completed target of {shared_state.get('target_keys', 0):,} keys without finding a match."
+                                    return None
+                                
                                 # Track worker progress for non-verbose mode
                                 worker_progress[result.worker_id] = result.attempts
+                                
+                                # Update progress bar immediately when worker completes batch
+                                if not config.verbose and progress_bar:
+                                    total_attempts = sum(worker_progress.values())
+                                    elapsed = time.time() - self.start_time
+                                    rate = total_attempts / elapsed if elapsed > 0 else 0
+                                    progress_bar.update(total_attempts, rate)
                                 
                                 # Check if worker needs restart (performance degradation)
                                 if not result.batch_completed and config.health_check:
@@ -1237,15 +1469,7 @@ class MeshCoreKeyGenerator:
                                     print(f"Worker failed with exception: {e}")
                                 # Don't restart on exceptions, just continue with remaining workers
                         
-                        # Show consolidated progress update for non-verbose mode
-                        current_time = time.time()
-                        if not config.verbose and current_time - last_progress_update >= progress_update_interval:
-                            if worker_progress:
-                                total_attempts = sum(worker_progress.values())
-                                elapsed = current_time - self.start_time
-                                rate = total_attempts / elapsed if elapsed > 0 else 0
-                                print(f"Progress: {total_attempts:,} total attempts | {rate:,.0f} keys/sec | {elapsed:.1f}s elapsed")
-                            last_progress_update = current_time
+                        # Progress updates are now handled by the monitoring thread
                         
                         # Check if we still have active workers
                         if not futures and not active_workers:
@@ -1253,10 +1477,21 @@ class MeshCoreKeyGenerator:
                                 print("All workers have completed or failed.")
                             break
                     
+                    # Stop progress monitoring and close progress bar before printing no match message
+                    stop_progress_monitor.set()
+                    if progress_bar:
+                        progress_bar.close()
+                    
                     print("\nNo match found after maximum iterations.")
+                    self.last_exit_reason = "No match found after maximum iterations."
                     return None
                     
                 except KeyboardInterrupt:
+                    # Stop progress monitoring and close progress bar on interrupt
+                    stop_progress_monitor.set()
+                    if progress_bar:
+                        progress_bar.close()
+                    
                     # Cancel all workers on interrupt
                     for f in futures:
                         if not f.done():
@@ -1846,7 +2081,13 @@ def main():
             print("\n⚠️  Warning: Generated key failed verification!")
             print("This indicates a problem with the key format.")
     else:
-        print("Key generation failed or was interrupted.")
+        # Check if we have a specific reason for the failure
+        if hasattr(generator, 'last_exit_reason'):
+            print(generator.last_exit_reason)
+        else:
+            print("No matching key found within the specified limits.")
+            print("This is normal for difficult patterns - try increasing the key count or time limit.")
+            print("You can also try different pattern modes or use --verbose for more details.")
 
 
 def create_config_from_args(args) -> VanityConfig:
