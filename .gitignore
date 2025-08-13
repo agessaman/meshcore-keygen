@@ -1,0 +1,67 @@
+# Ignore all .txt files (private/public keys, watchlists, etc.)
+*.txt
+
+# Ignore hex files (private/public keys)
+*.hex
+
+# Ignore JSON files (may contain sensitive data)
+*.json
+
+# Ignore backup files
+*.bak
+*.backup
+
+# Ignore temporary files
+*.tmp
+*.temp
+
+# Ignore log files
+*.log
+
+# Ignore environment files
+.env
+.env.local
+.env.*.local
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ignore virtual environment
+venv/
+env/
+ENV/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Ignore any files with "private" in the name
+*private*
+
+# Ignore any files with "key" in the name (except the main script)
+*key*
+!meshcore_keygen.py
+
+# Ignore any files with "secret" in the name
+*secret*
+
+# Ignore any files with "password" in the name
+*password*
+
+# Ignore any files with "credential" in the name
+*credential*
