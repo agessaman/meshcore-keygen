@@ -6,7 +6,7 @@ A key generator for MeshCore nodes that creates Ed25519 keypairs with custom pat
 
 - **MeshCore-Compatible**: Generates Ed25519 keys in the exact format MeshCore expects
 - **Multiple Pattern Modes**: Support for various cosmetic pattern matching modes
-- **Multi-Processing**: Multi-processor support with smart thread management (75% of cores on Linux/AMD64)
+- **Multi-Processing**: Multi-processor support with smart thread management (75% of cores on all platforms)
 - **Manual Worker Control**: Override auto-detection with `--workers` option
 - **Health Monitoring**: Automatic performance monitoring and worker restart
 - **Watchlist Support**: Monitor for additional patterns while searching
@@ -123,7 +123,7 @@ Control the number of worker processes:
 python meshcore_keygen.py --workers 4        # Use 4 worker processes
 python meshcore_keygen.py --workers 8        # Use 8 worker processes
 ```
-**Default**: Auto-detects optimal count (75% of available CPU cores on Linux/AMD64, performance cores on Apple Silicon, n-2 strategy on Windows/Intel Mac)
+**Default**: Auto-detects optimal count (75% of available CPU cores on all platforms, performance cores on Apple Silicon)
 
 #### Batch Size
 Control the batch size for worker processes:

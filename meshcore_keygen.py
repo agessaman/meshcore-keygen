@@ -449,11 +449,11 @@ class SystemUtils:
     def _get_windows_worker_count() -> int:
         """Get optimal worker count for Windows."""
         cpu_count = mp.cpu_count()
-        physical_cores = cpu_count // 2
-        recommended_cores = max(2, physical_cores - 2)
-        print(f"Windows detected: {physical_cores} estimated physical cores, {cpu_count} logical cores")
-        print(f"Using {recommended_cores} cores (n-2 strategy)")
-        return recommended_cores
+        # Use 75% of available threads, rounded to nearest integer
+        recommended_workers = max(2, round(cpu_count * 0.75))
+        print(f"Windows detected: {cpu_count} logical cores")
+        print(f"Using {recommended_workers} workers (75% of available cores)")
+        return recommended_workers
     
     @staticmethod
     def _get_macos_worker_count() -> int:
@@ -514,14 +514,20 @@ class SystemUtils:
                                   capture_output=True, text=True, check=False)
             if result.returncode == 0:
                 physical_cores = int(result.stdout.strip())
-                recommended_cores = max(2, physical_cores - 2)
+                # Use 75% of available physical cores, rounded to nearest integer
+                recommended_cores = max(2, round(physical_cores * 0.75))
                 print(f"Intel Mac detected: {physical_cores} physical cores")
-                print(f"Using {recommended_cores} cores (n-2 strategy)")
+                print(f"Using {recommended_cores} cores (75% of available cores)")
                 return recommended_cores
         except Exception:
             pass
         
-        return max(2, mp.cpu_count() // 2 - 2)
+        # Fallback: use 75% of logical cores
+        cpu_count = mp.cpu_count()
+        recommended_cores = max(2, round(cpu_count * 0.75))
+        print(f"Intel Mac fallback: {cpu_count} logical cores")
+        print(f"Using {recommended_cores} cores (75% of available cores)")
+        return recommended_cores
     
     @staticmethod
     def _get_linux_amd64_worker_count() -> int:
