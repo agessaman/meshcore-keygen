@@ -34,8 +34,7 @@ Cosmetic Pattern Modes:
   --pattern-6: First 6 hex chars == last 6 hex chars OR palindromic
   --pattern-8: First 8 hex chars == last 8 hex chars OR palindromic (default)
   --four-char: Legacy mode with 4-char vanity + optional --first-two constraint
-  --prefix: Keys starting with specific hex prefix
-  --prefix-vanity: Prefix + 8-char vanity pattern
+  --prefix: Keys starting with specific hex prefix (may combine with --pattern-*)
   --simple: Only check first two hex chars (requires --first-two)
 
 Usage:
@@ -96,7 +95,7 @@ class VanityMode(Enum):
     SIMPLE = "simple"
     PREFIX = "prefix"
     FOUR_CHAR = "four_char"
-    PREFIX_VANITY = "prefix_vanity"
+    PREFIX_VANITY = "prefix_pattern"
     VANITY_2 = "pattern_2"
     VANITY_4 = "pattern_4"
     VANITY_6 = "pattern_6"
@@ -1101,8 +1100,7 @@ class ArgumentParser:
                           help='Simple mode: only check first two hex chars (requires --first-two)')
         parser.add_argument('--four-char', action='store_true',
                           help='Legacy 4-char vanity mode with optional --first-two constraint')
-        parser.add_argument('--prefix-vanity', type=str,
-                          help='Prefix + 8-char vanity pattern (e.g., F8 for prefix + vanity)')
+
         parser.add_argument('--pattern-2', action='store_true',
                           help='2-char cosmetic pattern (first 2 hex == last 2 hex OR palindromic)')
         parser.add_argument('--pattern-4', action='store_true',
@@ -1202,7 +1200,7 @@ Examples:
   python meshcore_keygen.py --pattern-4         # 4-char cosmetic pattern
   python meshcore_keygen.py --pattern-6         # 6-char cosmetic pattern
   python meshcore_keygen.py --pattern-8         # 8-char cosmetic pattern
-  python meshcore_keygen.py --prefix-vanity F8 # Prefix + vanity pattern
+  python meshcore_keygen.py --prefix F8 --pattern-8 # Prefix + cosmetic pattern
   python meshcore_keygen.py --test-compatibility  # Test known MeshCore keys
   python meshcore_keygen.py --test-distribution 0.1  # Test with 100K keys
   python meshcore_keygen.py --test-entropy 10  # Test with 10K keys
@@ -1216,8 +1214,7 @@ Cosmetic Pattern Modes:
   --pattern-6: First 6 hex chars == last 6 hex chars OR palindromic
   --pattern-8: First 8 hex chars == last 8 hex chars OR palindromic (default)
   --four-char: Legacy mode with 4-char vanity + optional --first-two constraint
-  --prefix: Keys starting with specific hex prefix
-  --prefix-vanity: Prefix + 8-char vanity pattern
+  --prefix: Keys starting with specific hex prefix (combine with --pattern-*)
   --simple: Only check first two hex chars (requires --first-two)
 
 Batch Processing:
@@ -1969,27 +1966,19 @@ def main():
             print("Error: --prefix must be a valid hex string (e.g., F8A1, 1234)")
             return
     
-    if args.prefix_vanity:
-        # Validate prefix-vanity argument
-        if len(args.prefix_vanity) < 1:
-            print("Error: --prefix-vanity must be at least 1 character long.")
-            return
-        if len(args.prefix_vanity) > 8:
-            print("Error: --prefix-vanity cannot be longer than 8 characters.")
-            return
-        try:
-            # Try to convert to int to validate it's valid hex
-            int(args.prefix_vanity, 16)
-        except ValueError:
-            print("Error: --prefix-vanity must be a valid hex string (e.g., F8A1, 1234)")
-            return
+
     
-    # Check for conflicting modes
-    mode_count = sum([args.simple, args.prefix is not None, args.four_char, 
-                     args.prefix_vanity is not None, args.pattern_8, args.pattern_4, args.pattern_2, args.pattern_6])
-    if mode_count > 1:
-        print("Error: Cannot specify multiple pattern modes. Choose one of --simple, --prefix, --four-char, --prefix-vanity, --pattern-8, --pattern-4, --pattern-2, or --pattern-6.")
+    # Check for conflicting modes (allow combining --prefix with --pattern-*)
+    pattern_modes = [args.simple, args.four_char, args.pattern_8, args.pattern_4, args.pattern_2, args.pattern_6]
+    pattern_mode_count = sum(pattern_modes)
+    
+    if pattern_mode_count > 1:
+        print("Error: Cannot specify multiple pattern modes. Choose one of --simple, --four-char, --pattern-8, --pattern-4, --pattern-2, or --pattern-6.")
         return
+    
+    # --prefix can be used alone or combined with pattern modes
+    
+
     
     # Create configuration
     config = create_config_from_args(args)
@@ -2098,14 +2087,9 @@ def create_config_from_args(args) -> VanityConfig:
     
     if args.simple:
         mode = VanityMode.SIMPLE
-    elif args.prefix:
-        mode = VanityMode.PREFIX
     elif args.four_char:
         mode = VanityMode.FOUR_CHAR
         vanity_length = 4
-    elif args.prefix_vanity:
-        mode = VanityMode.PREFIX_VANITY
-        vanity_length = 8
     elif args.pattern_2:
         mode = VanityMode.VANITY_2
         vanity_length = 2
@@ -2118,6 +2102,34 @@ def create_config_from_args(args) -> VanityConfig:
     elif args.pattern_8:
         mode = VanityMode.VANITY_8
         vanity_length = 8
+    elif args.prefix:
+        # If only --prefix is specified, use PREFIX mode (no pattern requirement)
+        mode = VanityMode.PREFIX
+    elif args.pattern_2:
+        mode = VanityMode.VANITY_2
+        vanity_length = 2
+    elif args.pattern_4:
+        mode = VanityMode.VANITY_4
+        vanity_length = 4
+    elif args.pattern_6:
+        mode = VanityMode.VANITY_6
+        vanity_length = 6
+    elif args.pattern_8:
+        mode = VanityMode.VANITY_8
+        vanity_length = 8
+    
+    # Handle combination of --prefix with pattern modes (overrides individual modes)
+    if args.prefix and (args.pattern_2 or args.pattern_4 or args.pattern_6 or args.pattern_8):
+        mode = VanityMode.PREFIX_VANITY
+        # Use the specified pattern length
+        if args.pattern_2:
+            vanity_length = 2
+        elif args.pattern_4:
+            vanity_length = 4
+        elif args.pattern_6:
+            vanity_length = 6
+        elif args.pattern_8:
+            vanity_length = 8
     
     # Calculate max_iterations from keys if specified
     max_iterations = None
@@ -2142,7 +2154,7 @@ def create_config_from_args(args) -> VanityConfig:
     return VanityConfig(
         mode=mode,
         target_first_two=args.first_two,
-        target_prefix=args.prefix or args.prefix_vanity,
+        target_prefix=args.prefix,
         vanity_length=vanity_length,
         max_iterations=max_iterations,
         max_time=args.time,

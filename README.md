@@ -71,6 +71,8 @@ python meshcore_keygen.py --simple --first-two F8
 Search for keys starting with a specific hex prefix:
 ```bash
 python meshcore_keygen.py --prefix F8A1
+python meshcore_keygen.py --prefix F8
+python meshcore_keygen.py --prefix ABCDEF
 ```
 
 #### 3. Cosmetic Pattern Matching
@@ -93,8 +95,17 @@ python meshcore_keygen.py --pattern-8
 #### 4. Prefix + Cosmetic Pattern
 Combine prefix with cosmetic pattern matching:
 ```bash
-python meshcore_keygen.py --prefix-pattern F8
+# Prefix + 8-char cosmetic pattern (default)
+python meshcore_keygen.py --prefix F8 --pattern-8
+
+# Prefix + 4-char cosmetic pattern
+python meshcore_keygen.py --prefix F8 --pattern-4
+
+# Prefix + 2-char cosmetic pattern
+python meshcore_keygen.py --prefix F8 --pattern-2
 ```
+
+**Note**: `--prefix` can also be used alone to search for keys starting with a specific hex prefix without requiring a cosmetic pattern.
 
 #### 5. Legacy 4-Char Mode
 Legacy mode with optional first-two constraint:
@@ -198,41 +209,59 @@ python meshcore_keygen.py --test-meshcore-id 1  # 1K keys
 
 ### Example 1: Find a Key Starting with "F8"
 ```bash
+python meshcore_keygen.py --prefix F8
+```
+This will search for keys starting with "F8".
+
+### Example 1b: Find a Key Starting with "ABCDEF"
+```bash
+python meshcore_keygen.py --prefix ABCDEF
+```
+This will search for keys starting with "ABCDEF" (6-character prefix).
+
+### Example 2: Find a Key with Specific First Two Characters
+```bash
 python meshcore_keygen.py --first-two F8
 ```
-This will search for keys where the first two hex characters are "F8".
+This will search for keys where the first two hex characters are "F8" (same as `--prefix F8` for 2-character prefixes).
 
-### Example 2: Find a 4-Char Cosmetic Pattern Key
+### Example 4: Find a 4-Char Cosmetic Pattern Key
 ```bash
 python meshcore_keygen.py --pattern-4
 ```
 This will search for keys where the first 4 hex characters match the last 4 hex characters.
 
-### Example 3: Find a Key with Specific Prefix and Cosmetic Pattern
+### Example 5: Find a Key with Specific Prefix and Cosmetic Pattern
 ```bash
-python meshcore_keygen.py --prefix-pattern F8
+python meshcore_keygen.py --prefix F8 --pattern-8
 ```
 This will search for keys starting with "F8" AND having an 8-char cosmetic pattern.
 
-### Example 4: Run for 2 Hours with Health Monitoring
+### Example 5b: Find a Key with Longer Prefix and Cosmetic Pattern
+```bash
+python meshcore_keygen.py --prefix ABCDEF --pattern-4
+```
+This will search for keys starting with "ABCDEF" AND having a 4-char cosmetic pattern.
+
+### Example 6: Run for 2 Hours with Health Monitoring
 ```bash
 python meshcore_keygen.py --pattern-6 --time 2 --health-check
 ```
 This will search for 6-char cosmetic pattern keys for 2 hours with health monitoring enabled.
 
-### Example 5: Use Custom Watchlist
+### Example 7: Use Custom Watchlist
 ```bash
 python meshcore_keygen.py --first-two F8 --watchlist my_patterns.txt
 ```
 This will search for keys starting with "F8" while also monitoring patterns in `my_patterns.txt`.
 
-### Example 6: Verbose Mode for Debugging
+### Example 8: Verbose Mode for Debugging
 ```bash
 python meshcore_keygen.py --pattern-6 --verbose
 ```
 This will search for 6-char cosmetic pattern keys with detailed per-worker progress and health monitoring information.
 
-### Example 7: Clean Output Mode (Default)
+### Example 9: Clean Output Mode (Default)
 ```bash
 python meshcore_keygen.py --first-two F8
 ```
