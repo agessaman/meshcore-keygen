@@ -1,5 +1,6 @@
 # Ignore all .txt files (private/public keys, watchlists, etc.)
 *.txt
+!requirements.txt
 
 # Ignore hex files (private/public keys)
 *.hex

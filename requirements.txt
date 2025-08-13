@@ -1,0 +1,11 @@
+# MeshCore Ed25519 Vanity Key Generator Dependencies
+
+# Core cryptography library for Ed25519 operations
+PyNaCl>=1.5.0
+
+# Optional: System monitoring for enhanced health monitoring
+# Install with: pip install -r requirements.txt
+psutil>=5.8.0
+
+# Note: psutil is optional but recommended for full health monitoring features
+# The script will work without psutil but with limited health monitoring capabilities
