@@ -1,11 +1,11 @@
-# MeshCore Ed25519 Vanity Key Generator
+# MeshCore Ed25519 Key Generator
 
-A vanity key generator for MeshCore nodes that creates Ed25519 keypairs with custom patterns. This tool generates MeshCore-compatible Ed25519 keys with various vanity patterns for personalized node identification.
+A key generator for MeshCore nodes that creates Ed25519 keypairs with custom patterns. This tool generates MeshCore-compatible Ed25519 keys with various cosmetic patterns for personalized node identification.
 
 ## Features
 
 - **MeshCore-Compatible**: Generates Ed25519 keys in the exact format MeshCore expects
-- **Multiple Vanity Modes**: Support for various pattern matching modes
+- **Multiple Pattern Modes**: Support for various cosmetic pattern matching modes
 - **Multi-Processing**: Multi-processor support with batch processing
 - **Health Monitoring**: Automatic performance monitoring and worker restart
 - **Watchlist Support**: Monitor for additional patterns while searching
@@ -36,14 +36,14 @@ pip install psutil  # Optional, for enhanced health monitoring
 ### Basic Commands
 
 ```bash
-# Generate a key with default 8-char vanity pattern
+# Generate a key with default 8-char pattern
 python meshcore_keygen.py
 
 # Search for keys starting with specific hex prefix
 python meshcore_keygen.py --first-two F8
 
-# Generate key with 4-char vanity pattern
-python meshcore_keygen.py --vanity-4
+# Generate key with 4-char pattern
+python meshcore_keygen.py --pattern-4
 
 # Search for keys with specific prefix
 python meshcore_keygen.py --prefix F8A1
@@ -59,7 +59,7 @@ python meshcore_keygen.py --verbose   # Show per-worker details (disables progre
 python meshcore_keygen.py -v          # Short form for verbose mode
 ```
 
-### Vanity Pattern Modes
+### Cosmetic Pattern Modes
 
 #### 1. Simple Mode
 Search for keys starting with specific hex characters:
@@ -73,27 +73,27 @@ Search for keys starting with a specific hex prefix:
 python meshcore_keygen.py --prefix F8A1
 ```
 
-#### 3. Vanity Patterns
+#### 3. Cosmetic Pattern Matching
 Search for keys where first N hex characters match last N hex characters:
 
 ```bash
-# 2-char vanity (first 2 == last 2 OR palindromic)
-python meshcore_keygen.py --vanity-2
+# 2-char cosmetic pattern (first 2 == last 2 OR palindromic)
+python meshcore_keygen.py --pattern-2
 
-# 4-char vanity (first 4 == last 4 OR palindromic)
-python meshcore_keygen.py --vanity-4
+# 4-char cosmetic pattern (first 4 == last 4 OR palindromic)
+python meshcore_keygen.py --pattern-4
 
-# 6-char vanity (first 6 == last 6 OR palindromic)
-python meshcore_keygen.py --vanity-6
+# 6-char cosmetic pattern (first 6 == last 6 OR palindromic)
+python meshcore_keygen.py --pattern-6
 
-# 8-char vanity (first 8 == last 8 OR palindromic) - DEFAULT
-python meshcore_keygen.py --vanity-8
+# 8-char cosmetic pattern (first 8 == last 8 OR palindromic) - DEFAULT
+python meshcore_keygen.py --pattern-8
 ```
 
-#### 4. Prefix + Vanity
-Combine prefix with vanity pattern:
+#### 4. Prefix + Cosmetic Pattern
+Combine prefix with cosmetic pattern matching:
 ```bash
-python meshcore_keygen.py --prefix-vanity F8
+python meshcore_keygen.py --prefix-pattern F8
 ```
 
 #### 5. Legacy 4-Char Mode
@@ -165,7 +165,7 @@ Keys are saved as separate text files:
 #### JSON Format
 Save keys in JSON format for MeshCore app import:
 ```bash
-python meshcore_keygen.py --vanity-4 --json
+  python meshcore_keygen.py --pattern-4 --json
 ```
 
 ### Testing Functions
@@ -202,23 +202,23 @@ python meshcore_keygen.py --first-two F8
 ```
 This will search for keys where the first two hex characters are "F8".
 
-### Example 2: Find a 4-Char Vanity Key
+### Example 2: Find a 4-Char Cosmetic Pattern Key
 ```bash
-python meshcore_keygen.py --vanity-4
+python meshcore_keygen.py --pattern-4
 ```
 This will search for keys where the first 4 hex characters match the last 4 hex characters.
 
-### Example 3: Find a Key with Specific Prefix and Vanity
+### Example 3: Find a Key with Specific Prefix and Cosmetic Pattern
 ```bash
-python meshcore_keygen.py --prefix-vanity F8
+python meshcore_keygen.py --prefix-pattern F8
 ```
-This will search for keys starting with "F8" AND having an 8-char vanity pattern.
+This will search for keys starting with "F8" AND having an 8-char cosmetic pattern.
 
 ### Example 4: Run for 2 Hours with Health Monitoring
 ```bash
-python meshcore_keygen.py --vanity-6 --time 2 --health-check
+python meshcore_keygen.py --pattern-6 --time 2 --health-check
 ```
-This will search for 6-char vanity keys for 2 hours with health monitoring enabled.
+This will search for 6-char cosmetic pattern keys for 2 hours with health monitoring enabled.
 
 ### Example 5: Use Custom Watchlist
 ```bash
@@ -228,9 +228,9 @@ This will search for keys starting with "F8" while also monitoring patterns in `
 
 ### Example 6: Verbose Mode for Debugging
 ```bash
-python meshcore_keygen.py --vanity-6 --verbose
+python meshcore_keygen.py --pattern-6 --verbose
 ```
-This will search for 6-char vanity keys with detailed per-worker progress and health monitoring information.
+This will search for 6-char cosmetic pattern keys with detailed per-worker progress and health monitoring information.
 
 ### Example 7: Clean Output Mode (Default)
 ```bash
@@ -284,7 +284,7 @@ SUCCESS! Found matching Ed25519 key!
 Total time: 45.2s (0.8m)
 ============================================================
 
-Generated MeshCore Ed25519 Vanity Key:
+Generated MeshCore Ed25519 Key:
 ----------------------------------------
 Matching Pattern: F8A1B2C3
 First 8 hex:     F8A1B2C3
@@ -398,4 +398,4 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 ---
 
-**Note**: This tool generates vanity keys for MeshCore nodes. The generated keys are Ed25519 keypairs that are compatible with the MeshCore protocol.
+**Note**: This tool generates cosmetic pattern keys for MeshCore nodes. The generated keys are Ed25519 keypairs that are compatible with the MeshCore protocol.

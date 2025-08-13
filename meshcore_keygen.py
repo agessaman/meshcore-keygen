@@ -28,11 +28,11 @@ Features:
 - System resource monitoring
 - Performance degradation detection and recovery
 
-Vanity Pattern Modes:
-  --vanity-2: First 2 hex chars == last 2 hex chars OR palindromic
-  --vanity-4: First 4 hex chars == last 4 hex chars OR palindromic  
-  --vanity-6: First 6 hex chars == last 6 hex chars OR palindromic
-  --vanity-8: First 8 hex chars == last 8 hex chars OR palindromic (default)
+Cosmetic Pattern Modes:
+  --pattern-2: First 2 hex chars == last 2 hex chars OR palindromic
+  --pattern-4: First 4 hex chars == last 4 hex chars OR palindromic  
+  --pattern-6: First 6 hex chars == last 6 hex chars OR palindromic
+  --pattern-8: First 8 hex chars == last 8 hex chars OR palindromic (default)
   --four-char: Legacy mode with 4-char vanity + optional --first-two constraint
   --prefix: Keys starting with specific hex prefix
   --prefix-vanity: Prefix + 8-char vanity pattern
@@ -44,8 +44,8 @@ Usage:
     python meshcore_keygen.py --time 2           # Run for 2 hours
     python meshcore_keygen.py --batch-size 500K  # Use 500K keys per batch
     python meshcore_keygen.py --first-two F8     # Search for keys starting with F8
-    python meshcore_keygen.py --vanity-4         # Search for 4-char vanity patterns
-    python meshcore_keygen.py --vanity-6         # Search for 6-char vanity patterns
+    python meshcore_keygen.py --pattern-4         # Search for 4-char cosmetic patterns
+    python meshcore_keygen.py --pattern-6         # Search for 6-char cosmetic patterns
     python meshcore_keygen.py --health-check     # Enable health monitoring (default)
     python meshcore_keygen.py --no-health-check  # Disable health monitoring
     python meshcore_keygen.py --verbose          # Show detailed progress (disables progress bar)
@@ -92,15 +92,15 @@ except ImportError:
 
 
 class VanityMode(Enum):
-    """Enum for different vanity pattern modes."""
+    """Enum for different cosmetic pattern modes."""
     SIMPLE = "simple"
     PREFIX = "prefix"
     FOUR_CHAR = "four_char"
     PREFIX_VANITY = "prefix_vanity"
-    VANITY_2 = "vanity_2"
-    VANITY_4 = "vanity_4"
-    VANITY_6 = "vanity_6"
-    VANITY_8 = "vanity_8"
+    VANITY_2 = "pattern_2"
+    VANITY_4 = "pattern_4"
+    VANITY_6 = "pattern_6"
+    VANITY_8 = "pattern_8"
     DEFAULT = "default"
 
 
@@ -1103,14 +1103,14 @@ class ArgumentParser:
                           help='Legacy 4-char vanity mode with optional --first-two constraint')
         parser.add_argument('--prefix-vanity', type=str,
                           help='Prefix + 8-char vanity pattern (e.g., F8 for prefix + vanity)')
-        parser.add_argument('--vanity-2', action='store_true',
-                          help='2-char vanity pattern (first 2 hex == last 2 hex OR palindromic)')
-        parser.add_argument('--vanity-4', action='store_true',
-                          help='4-char vanity pattern (first 4 hex == last 4 hex OR palindromic)')
-        parser.add_argument('--vanity-6', action='store_true',
-                          help='6-char vanity pattern (first 6 hex == last 6 hex OR palindromic)')
-        parser.add_argument('--vanity-8', action='store_true',
-                          help='8-char vanity pattern (first 8 hex == last 8 hex OR palindromic)')
+        parser.add_argument('--pattern-2', action='store_true',
+                          help='2-char cosmetic pattern (first 2 hex == last 2 hex OR palindromic)')
+        parser.add_argument('--pattern-4', action='store_true',
+                          help='4-char cosmetic pattern (first 4 hex == last 4 hex OR palindromic)')
+        parser.add_argument('--pattern-6', action='store_true',
+                          help='6-char cosmetic pattern (first 6 hex == last 6 hex OR palindromic)')
+        parser.add_argument('--pattern-8', action='store_true',
+                          help='8-char cosmetic pattern (first 8 hex == last 8 hex OR palindromic)')
         parser.add_argument('--health-check', action='store_true', default=True,
                           help='Enable health monitoring (default) to restart workers if performance degrades.')
         parser.add_argument('--no-health-check', action='store_false', dest='health_check',
@@ -1198,23 +1198,23 @@ Examples:
   python meshcore_keygen.py --prefix F8A1      # Keys starting with F8A1
   python meshcore_keygen.py --four-char        # 4-char vanity (legacy mode)
   python meshcore_keygen.py --four-char --first-two F8  # 4-char + F8 start
-  python meshcore_keygen.py --vanity-2         # 2-char vanity pattern
-  python meshcore_keygen.py --vanity-4         # 4-char vanity pattern
-  python meshcore_keygen.py --vanity-6         # 6-char vanity pattern
-  python meshcore_keygen.py --vanity-8         # 8-char vanity pattern
+  python meshcore_keygen.py --pattern-2         # 2-char cosmetic pattern
+  python meshcore_keygen.py --pattern-4         # 4-char cosmetic pattern
+  python meshcore_keygen.py --pattern-6         # 6-char cosmetic pattern
+  python meshcore_keygen.py --pattern-8         # 8-char cosmetic pattern
   python meshcore_keygen.py --prefix-vanity F8 # Prefix + vanity pattern
   python meshcore_keygen.py --test-compatibility  # Test known MeshCore keys
   python meshcore_keygen.py --test-distribution 0.1  # Test with 100K keys
   python meshcore_keygen.py --test-entropy 10  # Test with 10K keys
-  python meshcore_keygen.py --vanity-4 --json  # Generate vanity key in JSON format
+  python meshcore_keygen.py --pattern-4 --json  # Generate cosmetic pattern key in JSON format
   python meshcore_keygen.py --first-two F8 --verbose  # Enable verbose output
-  python meshcore_keygen.py --vanity-6 -v  # Short form for verbose mode
+  python meshcore_keygen.py --pattern-6 -v  # Short form for verbose mode
 
-Vanity Pattern Modes:
-  --vanity-2: First 2 hex chars == last 2 hex chars OR palindromic
-  --vanity-4: First 4 hex chars == last 4 hex chars OR palindromic  
-  --vanity-6: First 6 hex chars == last 6 hex chars OR palindromic
-  --vanity-8: First 8 hex chars == last 8 hex chars OR palindromic (default)
+Cosmetic Pattern Modes:
+  --pattern-2: First 2 hex chars == last 2 hex chars OR palindromic
+  --pattern-4: First 4 hex chars == last 4 hex chars OR palindromic  
+  --pattern-6: First 6 hex chars == last 6 hex chars OR palindromic
+  --pattern-8: First 8 hex chars == last 8 hex chars OR palindromic (default)
   --four-char: Legacy mode with 4-char vanity + optional --first-two constraint
   --prefix: Keys starting with specific hex prefix
   --prefix-vanity: Prefix + 8-char vanity pattern
@@ -1346,7 +1346,7 @@ class MeshCoreKeyGenerator:
                         if config.max_time and elapsed >= config.max_time:
                             shared_state['key_found'] = True  # Signal workers to stop
                             break
-                    time.sleep(0.5)  # Check every 0.5 seconds
+                    time.sleep(1.0)  # Check every 1.0 seconds for better performance
             
             # Start progress monitoring thread
             progress_thread = threading.Thread(target=progress_monitor, daemon=True)
@@ -1986,9 +1986,9 @@ def main():
     
     # Check for conflicting modes
     mode_count = sum([args.simple, args.prefix is not None, args.four_char, 
-                     args.prefix_vanity is not None, args.vanity_8, args.vanity_4, args.vanity_2, args.vanity_6])
+                     args.prefix_vanity is not None, args.pattern_8, args.pattern_4, args.pattern_2, args.pattern_6])
     if mode_count > 1:
-        print("Error: Cannot specify multiple vanity modes. Choose one of --simple, --prefix, --four-char, --prefix-vanity, --vanity-8, --vanity-4, --vanity-2, or --vanity-6.")
+        print("Error: Cannot specify multiple pattern modes. Choose one of --simple, --prefix, --four-char, --prefix-vanity, --pattern-8, --pattern-4, --pattern-2, or --pattern-6.")
         return
     
     # Create configuration
@@ -2106,16 +2106,16 @@ def create_config_from_args(args) -> VanityConfig:
     elif args.prefix_vanity:
         mode = VanityMode.PREFIX_VANITY
         vanity_length = 8
-    elif args.vanity_2:
+    elif args.pattern_2:
         mode = VanityMode.VANITY_2
         vanity_length = 2
-    elif args.vanity_4:
+    elif args.pattern_4:
         mode = VanityMode.VANITY_4
         vanity_length = 4
-    elif args.vanity_6:
+    elif args.pattern_6:
         mode = VanityMode.VANITY_6
         vanity_length = 6
-    elif args.vanity_8:
+    elif args.pattern_8:
         mode = VanityMode.VANITY_8
         vanity_length = 8
     
