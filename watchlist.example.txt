@@ -1,0 +1,49 @@
+# Example watchlist for MeshCore vanity key generator
+# This file shows the format for creating your own watchlist
+# Copy this file to watchlist.txt and customize it with your own patterns
+
+# Common cool patterns
+DEAD...BEEF|Classic hex pattern
+CAFE...BABE|Another classic
+F00D...BABE|Food and baby
+C0DE...DEAD|Code and dead
+
+# 4-char patterns (moderately common)
+F8A1...B2C3|F8A1 start with B2C3 end
+1234...5678|Numeric pattern
+
+# Repeated 8-character patterns (very rare but cool!)
+AAAAAAAA...AAAAAAAA|All A's repeated
+BBBBBBBB...BBBBBBBB|All B's repeated
+FFFFFFFF...FFFFFFFF|All F's repeated
+00000000...00000000|All 0's repeated
+
+# Alternating patterns (very rare but cool!)
+01010101...01010101|Alternating 0 and 1
+10101010...10101010|Alternating 1 and 0
+ABABABAB...ABABABAB|Alternating A and B
+F0F0F0F0...F0F0F0F0|Alternating F and 0
+
+# Available 2-char prefixes - Repeating patterns
+# These are examples of available 2-char prefixes
+00...00000000|Available prefix 00 - All zeros
+01...01010101|Available prefix 01 - Alternating 0/1
+F8...F8F8F8F8|Available prefix F8 - Repeating F8
+FF...FFFFFFFF|Available prefix FF - All F's
+
+# Reverse patterns - First 8 chars repeating, last 2 chars match prefix
+00000000...00|Reverse pattern - All zeros ending with 00
+01010101...01|Reverse pattern - Alternating 0/1 ending with 01
+F8F8F8F8...F8|Reverse pattern - Repeating F8 ending with F8
+FFFFFFFF...FF|Reverse pattern - All F's ending with FF
+
+# Comments and empty lines are ignored
+# Add your own patterns below:
+
+# Custom patterns you might want to try:
+# Replace with valid hex characters only (0-9, A-F)
+# Examples:
+# 2023...2023|Year 2023 pattern
+# BEEF...CAFE|Beef and cafe pattern
+# FACE...BOOK|Face and book pattern
+# DEAD...BEEF|Dead and beef pattern

@@ -156,6 +156,7 @@ class VanityConfig:
     watchlist_file: Optional[str] = None  # Path to watchlist file
     watchlist_patterns: List[WatchlistPattern] = None  # Loaded watchlist patterns
     health_check: bool = True # Default to True for health monitoring
+    verbose: bool = False # Default to False for clean output
 
 
 @dataclass
@@ -521,9 +522,9 @@ class HealthMonitor:
         self.initial_memory = self._get_memory_usage()
         self.performance_history = []
         self.max_history_size = 10
-        self.gc_interval = 30  # Force GC every 30 seconds
-        self.memory_check_interval = 10  # Check memory every 10 seconds
-        self.memory_threshold = 100 * 1024 * 1024  # 100MB increase threshold
+        self.gc_interval = 120  # Force GC every 2 minutes (reduced frequency)
+        self.memory_check_interval = 30  # Check memory every 30 seconds (reduced frequency)
+        self.memory_threshold = 200 * 1024 * 1024  # 200MB increase threshold (increased threshold)
         self.performance_threshold = 0.7  # 70% performance degradation threshold
         
     def _get_memory_usage(self) -> int:
@@ -610,10 +611,11 @@ class HealthMonitor:
 class PerformanceTracker:
     """Tracks and analyzes performance metrics over time."""
     
-    def __init__(self, probability: float = None):
+    def __init__(self, probability: float = None, verbose: bool = False):
         self.start_time = time.time()
         self.last_update = time.time()
         self.probability = probability
+        self.verbose = verbose
         self.performance_samples = []
         self.max_samples = 20
         self.degradation_threshold = 0.6  # 60% performance drop triggers restart
@@ -650,8 +652,10 @@ class PerformanceTracker:
         
         eta = self._estimate_eta(attempts, elapsed, rate)
         
-        print(f"Worker {worker_id}: {attempts:,} attempts | "
-              f"{rate:,.0f} keys/sec | {elapsed:.1f}s | ETA: {eta}")
+        # Only print if verbose mode is enabled
+        if self.verbose:
+            print(f"Worker {worker_id}: {attempts:,} attempts | "
+                  f"{rate:,.0f} keys/sec | {elapsed:.1f}s | ETA: {eta}")
         
         self.last_update = time.time()
     
@@ -711,16 +715,18 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
     
     # Calculate probability for accurate ETA
     probability = calculate_pattern_probability(config)
-    tracker = PerformanceTracker(probability)
+    tracker = PerformanceTracker(probability, config.verbose)
     
     # Initialize health monitor if enabled
     health_monitor = None
     if config.health_check:
         try:
             health_monitor = HealthMonitor(worker_id, config)
-            print(f"Worker {worker_id}: Health monitoring enabled")
+            if config.verbose:
+                print(f"Worker {worker_id}: Health monitoring enabled")
         except Exception as e:
-            print(f"Worker {worker_id}: Failed to initialize health monitor: {e}")
+            if config.verbose:
+                print(f"Worker {worker_id}: Failed to initialize health monitor: {e}")
     
     total_attempts = 0
     consecutive_slow_batches = 0
@@ -795,8 +801,8 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
         if health_monitor:
             health_status = health_monitor.check_health(current_rate, batch_attempts, batch_time)
             
-            # Report health status if there are warnings or actions
-            if health_status['warnings'] or health_status['actions_taken']:
+            # Report health status if there are warnings or actions (only in verbose mode)
+            if config.verbose and (health_status['warnings'] or health_status['actions_taken']):
                 print(f"Worker {worker_id} Health Check:")
                 for warning in health_status['warnings']:
                     print(f"  ⚠️  {warning}")
@@ -813,10 +819,12 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
             # Check for severe performance degradation
             if not health_status['healthy']:
                 consecutive_slow_batches += 1
-                print(f"Worker {worker_id}: Performance degradation detected ({consecutive_slow_batches}/{max_slow_batches})")
+                if config.verbose:
+                    print(f"Worker {worker_id}: Performance degradation detected ({consecutive_slow_batches}/{max_slow_batches})")
                 
                 if consecutive_slow_batches >= max_slow_batches:
-                    print(f"Worker {worker_id}: Restarting due to performance degradation")
+                    if config.verbose:
+                        print(f"Worker {worker_id}: Restarting due to performance degradation")
                     # Force garbage collection before restart
                     gc.collect()
                     return BatchResult(worker_id=worker_id, attempts=total_attempts, batch_completed=False)
@@ -826,9 +834,10 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
         # Update tracker with current rate for performance analysis
         tracker.update(worker_id, total_attempts, current_rate)
         
-        # Report batch completion
-        print(f"Worker {worker_id}: Completed batch of {batch_attempts:,} keys in {batch_time:.1f}s "
-              f"({current_rate:,.0f} keys/sec) | Total: {total_attempts:,}")
+        # Report batch completion (only in verbose mode)
+        if config.verbose:
+            print(f"Worker {worker_id}: Completed batch of {batch_attempts:,} keys in {batch_time:.1f}s "
+                  f"({current_rate:,.0f} keys/sec) | Total: {total_attempts:,}")
         
         # Check if we should continue (another worker might have found a key)
         if shared_state.get('key_found', False):
@@ -917,6 +926,8 @@ class ArgumentParser:
                           help='Enable health monitoring (default) to restart workers if performance degrades.')
         parser.add_argument('--no-health-check', action='store_false', dest='health_check',
                           help='Disable health monitoring and do not restart workers on performance degradation.')
+        parser.add_argument('--verbose', '-v', action='store_true',
+                          help='Enable verbose output including per-worker progress and health monitoring details.')
         
         # Test functions
         parser.add_argument('--test-compatibility', action='store_true',
@@ -999,6 +1010,8 @@ Examples:
   python meshcore_keygen.py --test-distribution 0.1  # Test with 100K keys
   python meshcore_keygen.py --test-entropy 10  # Test with 10K keys
   python meshcore_keygen.py --vanity-4 --json  # Generate vanity key in JSON format
+  python meshcore_keygen.py --first-two F8 --verbose  # Enable verbose output
+  python meshcore_keygen.py --vanity-6 -v  # Short form for verbose mode
 
 Vanity Pattern Modes:
   --vanity-2: First 2 hex chars == last 2 hex chars OR palindromic
@@ -1079,13 +1092,20 @@ class MeshCoreKeyGenerator:
             if config.health_check:
                 try:
                     global_health_monitor = HealthMonitor(-1, config)  # -1 indicates global monitor
-                    print("Global health monitoring enabled")
+                    if config.verbose:
+                        print("Global health monitoring enabled")
                 except Exception as e:
-                    print(f"Failed to initialize global health monitor: {e}")
+                    if config.verbose:
+                        print(f"Failed to initialize global health monitor: {e}")
             
             worker_restart_count = 0
             max_restarts_per_worker = 5
             worker_restarts = {}
+            
+            # Progress tracking for non-verbose mode
+            worker_progress = {}
+            last_progress_update = time.time()
+            progress_update_interval = 5  # Update progress every 5 seconds
             
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
                 futures = []
@@ -1124,6 +1144,9 @@ class MeshCoreKeyGenerator:
                                     print("Note: Other workers may continue briefly - this is normal multiprocessing behavior.")
                                     return result.found_key
                                 
+                                # Track worker progress for non-verbose mode
+                                worker_progress[result.worker_id] = result.attempts
+                                
                                 # Check if worker needs restart (performance degradation)
                                 if not result.batch_completed and config.health_check:
                                     # Find which worker this was
@@ -1131,30 +1154,44 @@ class MeshCoreKeyGenerator:
                                     worker_restarts[worker_id] = worker_restarts.get(worker_id, 0) + 1
                                     
                                     if worker_restarts[worker_id] <= max_restarts_per_worker:
-                                        print(f"Restarting worker {worker_id} (restart {worker_restarts[worker_id]}/{max_restarts_per_worker})")
+                                        if config.verbose:
+                                            print(f"Restarting worker {worker_id} (restart {worker_restarts[worker_id]}/{max_restarts_per_worker})")
                                         
                                         # Start a new worker to replace the failed one
                                         new_future = executor.submit(worker_process_batch, worker_id, config, shared_state)
                                         futures.append(new_future)
                                         
                                         # Global health check
-                                        if global_health_monitor:
+                                        if global_health_monitor and config.verbose:
                                             health_status = global_health_monitor.check_health(0, 0, 0)
                                             if health_status['warnings']:
                                                 print("Global Health Check:")
                                                 for warning in health_status['warnings']:
                                                     print(f"  ⚠️  {warning}")
                                     else:
-                                        print(f"Worker {worker_id} exceeded maximum restarts, continuing with remaining workers")
+                                        if config.verbose:
+                                            print(f"Worker {worker_id} exceeded maximum restarts, continuing with remaining workers")
                                         active_workers.discard(worker_id)
                                 
                             except Exception as e:
-                                print(f"Worker failed with exception: {e}")
+                                if config.verbose:
+                                    print(f"Worker failed with exception: {e}")
                                 # Don't restart on exceptions, just continue with remaining workers
+                        
+                        # Show consolidated progress update for non-verbose mode
+                        current_time = time.time()
+                        if not config.verbose and current_time - last_progress_update >= progress_update_interval:
+                            if worker_progress:
+                                total_attempts = sum(worker_progress.values())
+                                elapsed = current_time - self.start_time
+                                rate = total_attempts / elapsed if elapsed > 0 else 0
+                                print(f"Progress: {total_attempts:,} total attempts | {rate:,.0f} keys/sec | {elapsed:.1f}s elapsed")
+                            last_progress_update = current_time
                         
                         # Check if we still have active workers
                         if not futures and not active_workers:
-                            print("All workers have completed or failed.")
+                            if not config.verbose:
+                                print("All workers have completed or failed.")
                             break
                     
                     print("\nNo match found after maximum iterations.")
@@ -1692,6 +1729,17 @@ def main():
         print("   - No performance monitoring")
         print("   - No automatic worker restart")
     
+    # Show verbose mode status
+    if config.verbose:
+        print("📝 Verbose Mode: ENABLED")
+        print("   - Per-worker progress updates ✓")
+        print("   - Health monitoring details ✓")
+        print("   - Batch completion reports ✓")
+    else:
+        print("📝 Verbose Mode: DISABLED")
+        print("   - Consolidated progress updates ✓")
+        print("   - Clean output mode ✓")
+    
     # Show system status
     print_system_status()
     
@@ -1800,7 +1848,8 @@ def create_config_from_args(args) -> VanityConfig:
         max_time=args.time,
         batch_size=batch_size,
         watchlist_file=watchlist_file,
-        health_check=args.health_check # Pass health_check argument
+        health_check=args.health_check, # Pass health_check argument
+        verbose=args.verbose # Pass verbose argument
     )
 
 
