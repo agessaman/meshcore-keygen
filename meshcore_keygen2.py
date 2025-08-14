@@ -1606,13 +1606,13 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
             gpu_batch_size = config.gpu_batch_size or min(batch_size, 100000)  # Default GPU batch size
             keypairs = gpu_accelerator.generate_keys_batch(gpu_batch_size)
             
-            # Debug: Check if GPU generated keys
+            # Check if GPU generated keys
             if len(keypairs) == 0:
                 if config.verbose:
                     print(f"Worker {worker_id}: GPU generated 0 keys, falling back to CPU")
                 # Fall back to CPU generation
                 gpu_accelerator = None
-            elif config.verbose and len(keypairs) > 0:
+            elif config.verbose:
                 print(f"Worker {worker_id}: GPU generated {len(keypairs)} keys successfully")
             
             # Process GPU-generated keys (if any)
