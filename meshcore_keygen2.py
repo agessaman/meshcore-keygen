@@ -70,6 +70,7 @@ Usage:
 """
 
 import os
+import sys
 import time
 import multiprocessing as mp
 import platform
@@ -120,29 +121,33 @@ except ImportError:
 
 # Apple Metal GPU Support
 try:
-    import Metal
-    import MetalPerformanceShaders as MPS
-    import Foundation
-    METAL_AVAILABLE = True
+    if platform.system() == 'Darwin':  # Only import Metal on macOS
+        import Metal
+        import MetalPerformanceShaders as MPS
+        import Foundation
+        METAL_AVAILABLE = True
+    else:
+        METAL_AVAILABLE = False
 except ImportError:
     METAL_AVAILABLE = False
-    print("Apple Metal GPU support not available. Install with: pip install pyobjc-framework-Metal")
+    if platform.system() == 'Darwin':
+        print("Apple Metal GPU support not available. Install with: pip install pyobjc-framework-Metal")
 
 # OpenCL GPU Support
+OPENCL_AVAILABLE = False
 try:
     import pyopencl as cl
     OPENCL_AVAILABLE = True
 except ImportError:
-    OPENCL_AVAILABLE = False
-    print("OpenCL GPU support not available. Install with: pip install pyopencl")
+    pass  # Silently handle missing OpenCL
 
 # Vulkan GPU Support
+VULKAN_AVAILABLE = False
 try:
     import vulkan as vk
     VULKAN_AVAILABLE = True
 except (ImportError, OSError):
-    VULKAN_AVAILABLE = False
-    print("Vulkan GPU support not available. Install with: pip install vulkan")
+    pass  # Silently handle missing Vulkan
 
 
 class GPUMode(Enum):
@@ -400,13 +405,17 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             self.context = cl.Context([device])
             self.queue = cl.CommandQueue(self.context)
             
-            # Create OpenCL program
+            # Create OpenCL program with options to suppress warnings
             kernel_source = self._get_ed25519_kernel_source()
-            self.program = cl.Program(self.context, kernel_source).build()
+            build_options = ["-w", "-cl-std=CL1.2"]  # -w suppresses warnings
+            self.program = cl.Program(self.context, kernel_source).build(options=build_options)
             self.kernel = self.program.generate_ed25519_keys
             
             self.initialized = True
-            print(f"✓ OpenCL GPU initialized: {device.name}")
+            if sys.platform.startswith('win'):
+                print(f"OpenCL GPU initialized: {device.name}")
+            else:
+                print(f"✓ OpenCL GPU initialized: {device.name}")
             return True
             
         except Exception as e:
@@ -2845,55 +2854,83 @@ def main():
     print("="*60)
     
     if config.gpu_mode != GPUMode.CPU_ONLY:
-        print("🔍 Detecting available GPUs...")
-        available_gpus = GPUDetector.detect_gpus()
-        
-        if available_gpus:
-            print(f"✓ Found {len(available_gpus)} GPU(s):")
-            for i, gpu in enumerate(available_gpus, 1):
-                print(f"  {i}. {gpu}")
+        # Use Windows-compatible symbols
+        if platform.system() == 'Windows':
+            print("Detecting available GPUs...")
+            available_gpus = GPUDetector.detect_gpus()
             
-            # Select appropriate GPU based on mode
-            selected_gpu = None
-            if config.gpu_mode == GPUMode.METAL:
-                selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "metal"), None)
-            elif config.gpu_mode == GPUMode.OPENCL:
+            if available_gpus:
+                print(f"Found {len(available_gpus)} GPU(s):")
+                for i, gpu in enumerate(available_gpus, 1):
+                    print(f"  {i}. {gpu}")
+        else:
+            print("🔍 Detecting available GPUs...")
+            available_gpus = GPUDetector.detect_gpus()
+            
+            if available_gpus:
+                print(f"✓ Found {len(available_gpus)} GPU(s):")
+                for i, gpu in enumerate(available_gpus, 1):
+                    print(f"  {i}. {gpu}")
+            
+        # Select appropriate GPU based on mode
+        selected_gpu = None
+        if config.gpu_mode == GPUMode.METAL:
+            selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "metal"), None)
+        elif config.gpu_mode == GPUMode.OPENCL:
+            selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "opencl"), None)
+        elif config.gpu_mode == GPUMode.VULKAN:
+            selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "vulkan"), None)
+        elif config.gpu_mode == GPUMode.AUTO:
+            # Auto-select best GPU (prefer OpenCL on Apple since Metal needs optimization, then Metal, then Vulkan)
+            if platform.system() == 'Darwin':
+                # On Apple Silicon, prefer OpenCL since it's working well
                 selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "opencl"), None)
-            elif config.gpu_mode == GPUMode.VULKAN:
-                selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "vulkan"), None)
-            elif config.gpu_mode == GPUMode.AUTO:
-                # Auto-select best GPU (prefer OpenCL on Apple since Metal needs optimization, then Metal, then Vulkan)
-                if platform.system() == 'Darwin':
-                    # On Apple Silicon, prefer OpenCL since it's working well
-                    selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "opencl"), None)
-                    if not selected_gpu:
-                        selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "metal"), None)
-                else:
-                    # On other platforms, prefer OpenCL, then Vulkan
-                    selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "opencl"), None)
-                    if not selected_gpu:
-                        selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "vulkan"), None)
                 if not selected_gpu:
                     selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "metal"), None)
+            else:
+                # On other platforms, prefer OpenCL, then Vulkan
+                selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "opencl"), None)
+                if not selected_gpu:
+                    selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "vulkan"), None)
+            if not selected_gpu:
+                selected_gpu = next((gpu for gpu in available_gpus if gpu.gpu_type == "metal"), None)
             
             if selected_gpu:
-                print(f"🎯 Selected GPU: {selected_gpu}")
+                if platform.system() == 'Windows':
+                    print(f"Selected GPU: {selected_gpu}")
+                else:
+                    print(f"🎯 Selected GPU: {selected_gpu}")
                 config.gpu_accelerator = GPUDetector.create_gpu_accelerator(selected_gpu, config.gpu_mode)
                 
                 if config.gpu_accelerator:
-                    print(f"🚀 GPU acceleration will be used for key generation")
+                    if platform.system() == 'Windows':
+                        print(f"GPU acceleration will be used for key generation")
+                    else:
+                        print(f"🚀 GPU acceleration will be used for key generation")
                     if config.gpu_batch_size:
                         print(f"   GPU batch size: {config.gpu_batch_size:,} keys")
                     else:
                         print(f"   GPU batch size: Auto (optimized for {selected_gpu.name})")
                 else:
-                    print("⚠️  Failed to create GPU accelerator, falling back to CPU")
+                    if platform.system() == 'Windows':
+                        print("Failed to create GPU accelerator, falling back to CPU")
+                    else:
+                        print("⚠️  Failed to create GPU accelerator, falling back to CPU")
             else:
-                print(f"⚠️  No suitable GPU found for mode '{config.gpu_mode.value}', falling back to CPU")
+                if platform.system() == 'Windows':
+                    print(f"No suitable GPU found for mode '{config.gpu_mode.value}', falling back to CPU")
+                else:
+                    print(f"⚠️  No suitable GPU found for mode '{config.gpu_mode.value}', falling back to CPU")
         else:
-            print("⚠️  No GPUs detected, using CPU-only mode")
+            if platform.system() == 'Windows':
+                print("No GPUs detected, using CPU-only mode")
+            else:
+                print("⚠️  No GPUs detected, using CPU-only mode")
     else:
-        print("🖥️  CPU-only mode enabled")
+        if platform.system() == 'Windows':
+            print("CPU-only mode enabled")
+        else:
+            print("🖥️  CPU-only mode enabled")
     
     # Show system status
     print_system_status()

@@ -28,8 +28,17 @@ A key generator for MeshCore nodes that creates Ed25519 keypairs with custom pat
 
 ### Dependencies
 
-Install the required packages:
+**Option A: Basic installation (CPU-only, recommended for Windows):**
+```bash
+pip install -r requirements-basic.txt
+```
 
+**Option B: Full installation with GPU acceleration:**
+```bash
+pip install -r requirements.txt
+```
+
+**Manual installation:**
 ```bash
 pip install PyNaCl
 pip install tqdm    # Required for progress bars
@@ -56,10 +65,10 @@ pip install pyopencl
 pip install vulkan
 ```
 
-**All GPU dependencies:**
-```bash
-pip install -r requirements.txt
-```
+**Windows GPU Installation Troubleshooting:**
+- If `pyopencl` fails to install, try: `pip install pyopencl --only-binary=all`
+- Or install Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+- Or use CPU-only mode: `--cpu-only`
 
 ## Usage
 
