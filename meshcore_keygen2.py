@@ -136,10 +136,11 @@ except ImportError:
 # OpenCL GPU Support
 OPENCL_AVAILABLE = False
 try:
-    import pyopencl as cl
-    # Suppress OpenCL compiler warnings
+    # Suppress OpenCL compiler warnings before importing
     import os
     os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0'
+    
+    import pyopencl as cl
     OPENCL_AVAILABLE = True
 except ImportError:
     pass  # Silently handle missing OpenCL
@@ -415,10 +416,20 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             self.kernel = self.program.generate_ed25519_keys
             
             self.initialized = True
-            if sys.platform.startswith('win'):
-                print(f"OpenCL GPU initialized: {device.name}")
-            else:
-                print(f"✓ OpenCL GPU initialized: {device.name}")
+            
+            # Test the kernel with a small batch
+            try:
+                test_keypairs = self.generate_keys_batch(10)
+                if len(test_keypairs) == 10:
+                    if sys.platform.startswith('win'):
+                        print(f"OpenCL GPU initialized: {device.name} (test passed)")
+                    else:
+                        print(f"✓ OpenCL GPU initialized: {device.name} (test passed)")
+                else:
+                    print(f"OpenCL GPU initialized: {device.name} (test failed - got {len(test_keypairs)} keys)")
+            except Exception as e:
+                print(f"OpenCL GPU initialized: {device.name} (test failed - {e})")
+            
             return True
             
         except Exception as e:
@@ -490,12 +501,18 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             # Execute kernel
             self.kernel(self.queue, (batch_size,), None, seed_buffer, public_buffer, private_buffer, np.uint32(batch_size))
             
+            # Wait for completion
+            self.queue.finish()
+            
             # Read results
             public_data = np.empty(batch_size * 32, dtype=np.uint8)
             private_data = np.empty(batch_size * 64, dtype=np.uint8)
             
             cl.enqueue_copy(self.queue, public_data, public_buffer)
             cl.enqueue_copy(self.queue, private_data, private_buffer)
+            
+            # Wait for copy to complete
+            self.queue.finish()
             
             # Convert to list of keypairs
             keypairs = []
@@ -509,6 +526,8 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             return keypairs
         except Exception as e:
             print(f"Failed to generate keys using OpenCL GPU: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
 
@@ -1570,7 +1589,16 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
             gpu_batch_size = config.gpu_batch_size or min(batch_size, 100000)  # Default GPU batch size
             keypairs = gpu_accelerator.generate_keys_batch(gpu_batch_size)
             
-            # Process GPU-generated keys
+            # Debug: Check if GPU generated keys
+            if len(keypairs) == 0:
+                if config.verbose:
+                    print(f"Worker {worker_id}: GPU generated 0 keys, falling back to CPU")
+                # Fall back to CPU generation
+                gpu_accelerator = None
+            elif config.verbose and len(keypairs) > 0:
+                print(f"Worker {worker_id}: GPU generated {len(keypairs)} keys successfully")
+            
+            # Process GPU-generated keys (if any)
             for public_bytes, private_bytes in keypairs:
                 # Check if another worker found a key (check every 50K attempts to reduce overhead)
                 if batch_attempts % 50000 == 0 and batch_attempts > 0 and shared_state.get('key_found', False):
