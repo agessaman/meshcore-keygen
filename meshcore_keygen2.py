@@ -137,6 +137,9 @@ except ImportError:
 OPENCL_AVAILABLE = False
 try:
     import pyopencl as cl
+    # Suppress OpenCL compiler warnings
+    import os
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0'
     OPENCL_AVAILABLE = True
 except ImportError:
     pass  # Silently handle missing OpenCL
@@ -407,7 +410,7 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             
             # Create OpenCL program with options to suppress warnings
             kernel_source = self._get_ed25519_kernel_source()
-            build_options = ["-w", "-cl-std=CL1.2"]  # -w suppresses warnings
+            build_options = ["-w", "-cl-std=CL1.2", "-cl-no-signed-zeros", "-cl-mad-enable"]  # Suppress warnings and optimize
             self.program = cl.Program(self.context, kernel_source).build(options=build_options)
             self.kernel = self.program.generate_ed25519_keys
             

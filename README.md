@@ -69,6 +69,7 @@ pip install vulkan
 - If `pyopencl` fails to install, try: `pip install pyopencl --only-binary=all`
 - Or install Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 - Or use CPU-only mode: `--cpu-only`
+- **OpenCL Compiler Warnings**: These are normal and don't affect functionality. The warnings are automatically suppressed.
 
 ## Usage
 
