@@ -22,12 +22,14 @@ def slow_pattern_matching(public_keys, target_first_two):
 def fast_pattern_matching(public_keys, target_first_two):
     """Fast pattern matching (optimized approach)."""
     target_bytes = bytes.fromhex(target_first_two)
+    print(f"Target bytes: {target_bytes} (length: {len(target_bytes)})")
     matches = []
     
     for i, public_key in enumerate(public_keys):
         # Direct byte comparison (fast)
-        if public_key[0] == target_bytes[0] and public_key[1] == target_bytes[1]:
-            matches.append(i)
+        if len(public_key) >= 2 and len(target_bytes) >= 2:
+            if public_key[0] == target_bytes[0] and public_key[1] == target_bytes[1]:
+                matches.append(i)
     
     return matches
 
@@ -39,15 +41,25 @@ def vectorized_pattern_matching(public_keys, target_first_two):
     public_array = np.array([list(key) for key in public_keys])
     
     # Vectorized comparison
-    matches = np.where((public_array[:, 0] == target_bytes[0]) & 
-                      (public_array[:, 1] == target_bytes[1]))[0]
+    if len(target_bytes) >= 2:
+        matches = np.where((public_array[:, 0] == target_bytes[0]) & 
+                          (public_array[:, 1] == target_bytes[1]))[0]
+    else:
+        matches = np.where(public_array[:, 0] == target_bytes[0])[0]
     
     return matches.tolist()
 
 # Test with 100,000 keys
 print("Generating test data...")
-public_keys = [bytes([i % 256, (i >> 8) % 256] + [0] * 30) for i in range(100000)]
-target_first_two = "F8"
+public_keys = []
+for i in range(100000):
+    # Create test keys with some matching the pattern
+    if i % 1000 == 0:  # Every 1000th key matches F8
+        key = bytes([0xF8, 0x00] + [0] * 30)
+    else:
+        key = bytes([i % 256, (i >> 8) % 256] + [0] * 30)
+    public_keys.append(key)
+target_first_two = "F800"  # Two bytes: F8 and 00
 
 print(f"Testing pattern matching on {len(public_keys)} keys...")
 print(f"Target pattern: {target_first_two}")
