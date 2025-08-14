@@ -18,8 +18,9 @@ numpy>=1.21.0
 
 # Apple Silicon (M1/M2/M3/M4) - Metal Performance Shaders
 # Status: Detected but shader optimization in progress
+# Platform: macOS only
 # Install with: pip install pyobjc-framework-Metal
-pyobjc-framework-Metal>=9.0
+pyobjc-framework-Metal>=9.0; sys_platform == "darwin"
 
 # NVIDIA/AMD GPUs - OpenCL (Cross-platform GPU acceleration)
 # Status: FULLY WORKING - Recommended for Apple Silicon and NVIDIA/AMD GPUs
@@ -44,7 +45,7 @@ vulkan>=1.3.0
 #   pip install pyopencl  # For OpenCL GPU acceleration
 #
 # For Apple Silicon with Metal (experimental):
-#   pip install pyobjc-framework-Metal
+#   pip install pyobjc-framework-Metal  # Only needed on macOS
 #
 # For Vulkan support (requires Vulkan SDK):
 #   pip install vulkan
