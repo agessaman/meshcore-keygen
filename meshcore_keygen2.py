@@ -411,7 +411,11 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             
             # Create OpenCL program with options to suppress warnings
             kernel_source = self._get_ed25519_kernel_source()
-            build_options = ["-w", "-cl-std=CL1.2", "-cl-no-signed-zeros", "-cl-mad-enable"]  # Suppress warnings and optimize
+            # Windows-compatible build options
+            if sys.platform.startswith('win'):
+                build_options = ["-w", "-cl-std=CL1.2", "-cl-no-signed-zeros", "-cl-mad-enable", "-cl-fast-relaxed-math"]
+            else:
+                build_options = ["-w", "-cl-std=CL1.2", "-cl-no-signed-zeros", "-cl-mad-enable"]
             self.program = cl.Program(self.context, kernel_source).build(options=build_options)
             self.kernel = self.program.generate_ed25519_keys
             
@@ -454,16 +458,22 @@ class OpenCLGPUAccelerator(GPUAccelerator):
                 seed_array[i] = (tid * 12345 + i * 67890) ^ (tid >> 16);
             }
             
-            // Simplified SHA-512 processing
+            // Simplified SHA-512 processing (avoid potential overflow)
             ulong digest[8];
             for (int i = 0; i < 8; i++) {
-                digest[i] = (ulong)seed_array[i] + 0x6a09e667f3bcc908UL + i;
+                digest[i] = (ulong)seed_array[i] + (ulong)0x6a09e667f3bcc908UL + (ulong)i;
             }
             
             // Clamp the scalar
             uchar clamped[32];
             for (int i = 0; i < 32; i++) {
-                clamped[i] = (uchar)(digest[i / 4] >> ((i % 4) * 8));
+                int digest_idx = i / 4;
+                int shift_amount = (i % 4) * 8;
+                if (digest_idx < 8 && shift_amount < 64) {
+                    clamped[i] = (uchar)((digest[digest_idx] >> shift_amount) & 0xFF);
+                } else {
+                    clamped[i] = 0;
+                }
             }
             clamped[0] &= 248;  // Clear bottom 3 bits
             clamped[31] &= 63;  // Clear top 2 bits
@@ -476,7 +486,13 @@ class OpenCLGPUAccelerator(GPUAccelerator):
             }
             // Add random filler
             for (int i = 32; i < 64; i++) {
-                private_keys[private_offset + i] = (uchar)(seed_array[i % 8] >> ((i % 4) * 8));
+                int seed_idx = i % 8;
+                int shift_amount = ((i % 4) * 8);
+                if (seed_idx < 8 && shift_amount < 32) {
+                    private_keys[private_offset + i] = (uchar)((seed_array[seed_idx] >> shift_amount) & 0xFF);
+                } else {
+                    private_keys[private_offset + i] = 0;
+                }
             }
             
             // Simplified public key generation
