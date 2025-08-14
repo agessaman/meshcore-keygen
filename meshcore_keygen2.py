@@ -1568,11 +1568,13 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
     
     # Initialize GPU accelerator if available
     gpu_accelerator = None
-    if config.gpu_accelerator and config.gpu_mode != GPUMode.CPU_ONLY:
+    if config.gpu_mode != GPUMode.CPU_ONLY:
         try:
-            gpu_accelerator = config.gpu_accelerator
-            if not gpu_accelerator.initialized:
-                if gpu_accelerator.initialize():
+            # Create a new GPU accelerator instance for this worker
+            # (GPU accelerators can't be shared between processes)
+            if config.gpu_accelerator:
+                gpu_accelerator = GPUDetector.create_gpu_accelerator(config.gpu_accelerator.gpu_info, config.gpu_mode)
+                if gpu_accelerator and gpu_accelerator.initialize():
                     if config.verbose:
                         print(f"Worker {worker_id}: GPU acceleration enabled ({gpu_accelerator.gpu_info})")
                 else:
