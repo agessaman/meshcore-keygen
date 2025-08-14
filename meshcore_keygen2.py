@@ -1615,30 +1615,32 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
             elif config.verbose:
                 print(f"Worker {worker_id}: GPU generated {len(keypairs)} keys successfully")
             
-            # Process GPU-generated keys (if any)
+            # Process GPU-generated keys (if any) - optimized for GPU batches
+            # Check if another worker found a key (check every 50K attempts to reduce overhead)
+            if batch_attempts % 50000 == 0 and batch_attempts > 0 and shared_state.get('key_found', False):
+                return BatchResult(worker_id=worker_id, attempts=total_attempts + batch_attempts, batch_completed=False)
+            
+            # Check time limit (check every 50K attempts to reduce overhead)
+            if batch_attempts % 50000 == 0 and max_time and (time.time() - start_time) > max_time:
+                return BatchResult(worker_id=worker_id, attempts=total_attempts + batch_attempts, batch_completed=False)
+            
+            # Update progress (only in verbose mode, every 100K attempts)
+            if config.verbose and batch_attempts % 100000 == 0 and tracker.should_update(total_attempts + batch_attempts):
+                tracker.update(worker_id, total_attempts + batch_attempts)
+            
+            # Fast pattern checking using direct byte comparisons where possible
+            # Convert target to bytes once and cache it
+            if config.mode == VanityMode.SIMPLE and config.target_first_two and not hasattr(config, '_target_bytes'):
+                config._target_bytes = bytes.fromhex(config.target_first_two)
+            
+            # Process all keys in the batch
             for public_bytes, private_bytes in keypairs:
-                # Check if another worker found a key (check every 50K attempts to reduce overhead)
-                if batch_attempts % 50000 == 0 and batch_attempts > 0 and shared_state.get('key_found', False):
-                    return BatchResult(worker_id=worker_id, attempts=total_attempts + batch_attempts, batch_completed=False)
-                
-                # Check time limit (check every 50K attempts to reduce overhead)
-                if batch_attempts % 50000 == 0 and max_time and (time.time() - start_time) > max_time:
-                    return BatchResult(worker_id=worker_id, attempts=total_attempts + batch_attempts, batch_completed=False)
-                
-                # Update progress (only in verbose mode, every 100K attempts)
-                if config.verbose and batch_attempts % 100000 == 0 and tracker.should_update(total_attempts + batch_attempts):
-                    tracker.update(worker_id, total_attempts + batch_attempts)
-                
-                # Fast pattern checking using direct byte comparisons where possible
                 main_pattern_match = False
                 watchlist_matches = []
                 
                 # Check for main pattern match (optimized)
                 if config.mode == VanityMode.SIMPLE and config.target_first_two:
                     # Fast 2-char prefix check using direct byte comparison
-                    # Convert target to bytes once and cache it
-                    if not hasattr(config, '_target_bytes'):
-                        config._target_bytes = bytes.fromhex(config.target_first_two)
                     main_pattern_match = (public_bytes[0] == config._target_bytes[0] and 
                                         public_bytes[1] == config._target_bytes[1])
                     
