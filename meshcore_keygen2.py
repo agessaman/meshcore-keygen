@@ -821,7 +821,7 @@ class VanityConfig:
     verbose: bool = False # Default to False for clean output
     gpu_mode: GPUMode = GPUMode.CPU_ONLY  # GPU acceleration mode
     gpu_batch_size: Optional[int] = None  # GPU-specific batch size
-    gpu_accelerator: Optional[GPUAccelerator] = None  # Active GPU accelerator
+    gpu_info: Optional[GPUInfo] = None  # GPU info for worker processes
 
 
 @dataclass
@@ -1568,18 +1568,17 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
     
     # Initialize GPU accelerator if available
     gpu_accelerator = None
-    if config.gpu_mode != GPUMode.CPU_ONLY:
+    if config.gpu_mode != GPUMode.CPU_ONLY and hasattr(config, 'gpu_info'):
         try:
             # Create a new GPU accelerator instance for this worker
             # (GPU accelerators can't be shared between processes)
-            if config.gpu_accelerator:
-                gpu_accelerator = GPUDetector.create_gpu_accelerator(config.gpu_accelerator.gpu_info, config.gpu_mode)
-                if gpu_accelerator and gpu_accelerator.initialize():
-                    if config.verbose:
-                        print(f"Worker {worker_id}: GPU acceleration enabled ({gpu_accelerator.gpu_info})")
-                else:
-                    print(f"Worker {worker_id}: Failed to initialize GPU accelerator, falling back to CPU")
-                    gpu_accelerator = None
+            gpu_accelerator = GPUDetector.create_gpu_accelerator(config.gpu_info, config.gpu_mode)
+            if gpu_accelerator and gpu_accelerator.initialize():
+                if config.verbose:
+                    print(f"Worker {worker_id}: GPU acceleration enabled ({gpu_accelerator.gpu_info})")
+            else:
+                print(f"Worker {worker_id}: Failed to initialize GPU accelerator, falling back to CPU")
+                gpu_accelerator = None
         except Exception as e:
             if config.verbose:
                 print(f"Worker {worker_id}: GPU initialization failed: {e}, falling back to CPU")
@@ -2949,22 +2948,18 @@ def main():
                     print(f"Selected GPU: {selected_gpu}")
                 else:
                     print(f"🎯 Selected GPU: {selected_gpu}")
-                config.gpu_accelerator = GPUDetector.create_gpu_accelerator(selected_gpu, config.gpu_mode)
+                # Store GPU info instead of accelerator (accelerators can't be shared between processes)
+                config.gpu_info = selected_gpu
+                config.gpu_accelerator = None  # Will be created in each worker process
                 
-                if config.gpu_accelerator:
-                    if platform.system() == 'Windows':
-                        print(f"GPU acceleration will be used for key generation")
-                    else:
-                        print(f"🚀 GPU acceleration will be used for key generation")
-                    if config.gpu_batch_size:
-                        print(f"   GPU batch size: {config.gpu_batch_size:,} keys")
-                    else:
-                        print(f"   GPU batch size: Auto (optimized for {selected_gpu.name})")
+                if platform.system() == 'Windows':
+                    print(f"GPU acceleration will be used for key generation")
                 else:
-                    if platform.system() == 'Windows':
-                        print("Failed to create GPU accelerator, falling back to CPU")
-                    else:
-                        print("⚠️  Failed to create GPU accelerator, falling back to CPU")
+                    print(f"🚀 GPU acceleration will be used for key generation")
+                if config.gpu_batch_size:
+                    print(f"   GPU batch size: {config.gpu_batch_size:,} keys")
+                else:
+                    print(f"   GPU batch size: Auto (optimized for {selected_gpu.name})")
             else:
                 if platform.system() == 'Windows':
                     print(f"No suitable GPU found for mode '{config.gpu_mode.value}', falling back to CPU")
@@ -3148,7 +3143,8 @@ def create_config_from_args(args) -> VanityConfig:
         health_check=args.health_check, # Pass health_check argument
         verbose=args.verbose, # Pass verbose argument
         gpu_mode=gpu_mode,
-        gpu_batch_size=gpu_batch_size
+        gpu_batch_size=gpu_batch_size,
+        gpu_info=None  # Will be set after GPU detection
     )
 
 
