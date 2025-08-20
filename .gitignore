@@ -58,7 +58,9 @@ Thumbs.db
 # Ignore any files with "key" in the name (except the main script)
 *key*
 !meshcore_keygen.py
-!meshcore_keygen2.py
+
+# Ignore specific keygen files
+meshcore_keygen2.py
 
 # Ignore any files with "secret" in the name
 *secret*
