@@ -5,10 +5,7 @@ A key generator for MeshCore nodes that creates Ed25519 keypairs with custom pat
 ## Features
 
 - **MeshCore-Compatible**: Generates Ed25519 keys in the exact format MeshCore expects
-- **GPU Acceleration**: Massive parallel key generation using:
-  - Apple Silicon (M1/M2/M3/M4): Metal Performance Shaders (MPS)
-  - NVIDIA/AMD GPUs: OpenCL and Vulkan support
-  - Automatic GPU detection and fallback to CPU
+
 - **Multiple Pattern Modes**: Support for various cosmetic pattern matching modes
 - **Multi-Processing**: Multi-processor support with smart thread management (75% of cores on all platforms)
 - **Manual Worker Control**: Override auto-detection with `--workers` option
@@ -33,43 +30,12 @@ A key generator for MeshCore nodes that creates Ed25519 keypairs with custom pat
 pip install -r requirements-basic.txt
 ```
 
-**Option B: Full installation with GPU acceleration:**
-```bash
-pip install -r requirements.txt
-```
-
 **Manual installation:**
 ```bash
 pip install PyNaCl
 pip install tqdm    # Required for progress bars
 pip install psutil  # Optional, for enhanced health monitoring
-pip install numpy   # Required for GPU acceleration
 ```
-
-### GPU Acceleration Dependencies (Optional)
-
-For GPU acceleration, install the appropriate libraries for your hardware:
-
-**Apple Silicon (M1/M2/M3/M4):**
-```bash
-pip install pyobjc-framework-Metal
-```
-
-**NVIDIA/AMD GPUs (OpenCL):**
-```bash
-pip install pyopencl
-```
-
-**NVIDIA/AMD GPUs (Vulkan):**
-```bash
-pip install vulkan
-```
-
-**Windows GPU Installation Troubleshooting:**
-- If `pyopencl` fails to install, try: `pip install pyopencl --only-binary=all`
-- Or install Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-- Or use CPU-only mode: `--cpu-only`
-- **OpenCL Compiler Warnings**: These are normal and don't affect functionality. The warnings are automatically suppressed.
 
 ## Usage
 
@@ -97,13 +63,7 @@ python meshcore_keygen.py --time 2    # 2 hours
 # Enable verbose output for detailed progress
 python meshcore_keygen.py --verbose   # Show per-worker details (disables progress bar)
 
-# GPU Acceleration Examples
-python meshcore_keygen.py --gpu              # Enable GPU acceleration (auto-detect)
-python meshcore_keygen.py --gpu-metal        # Force Apple Metal GPU acceleration
-python meshcore_keygen.py --gpu-opencl       # Force OpenCL GPU acceleration
-python meshcore_keygen.py --gpu-vulkan       # Force Vulkan GPU acceleration
-python meshcore_keygen.py --gpu-batch 1M     # Set GPU batch size to 1M keys
-python meshcore_keygen.py --first-two F8 --gpu  # Search with GPU acceleration
+
 python meshcore_keygen.py -v          # Short form for verbose mode
 ```
 
@@ -418,49 +378,16 @@ The script uses the correct Ed25519 algorithm that MeshCore expects:
 
 ### Performance
 - **Multi-processing**: Automatically detects optimal number of CPU cores
-- **GPU Acceleration**: Massive parallel key generation using GPU compute shaders
-  - Apple Silicon: Metal Performance Shaders for optimal performance
-  - NVIDIA/AMD: OpenCL and Vulkan for cross-platform acceleration
-  - Automatic GPU detection and fallback to CPU
 - **Batch Processing**: Configurable batch sizes for resource usage
 - **Health Monitoring**: Automatic worker restart on performance degradation
 - **Memory Management**: Configurable garbage collection (every 2 minutes) and memory monitoring
 - **Output Control**: Verbose mode for debugging, clean mode for standard use
-
-### GPU Acceleration
-
-The key generator supports GPU acceleration for massive parallel key generation:
-
-**Apple Silicon (M1/M2/M3/M4):**
-- OpenCL support for optimal performance (currently working)
-- Metal Performance Shaders (MPS) support (shader optimization in progress)
-- Automatically detected and used with `--gpu` (prefers OpenCL on Apple Silicon)
-- **Smart Worker Strategy**: Uses 50% of performance cores (2-4 workers) to avoid GPU resource contention
-- Typically 2-3x faster than CPU-only generation
-
-**NVIDIA/AMD GPUs:**
-- OpenCL support for broad compatibility (fully working)
-- Vulkan support for modern GPUs (requires Vulkan SDK)
-- Use `--gpu-opencl` or `--gpu-vulkan` to force specific API
-- **Smart Worker Strategy**: Optimized worker count based on GPU capabilities
-- Typically 2-5x faster than CPU-only generation
-
-**Configuration:**
-- `--gpu-batch SIZE`: Configure GPU batch size (default: auto-optimized)
-- `--workers COUNT`: Override auto-detected worker count
-- GPU batch sizes are typically larger than CPU batches for optimal performance
-- **Smart Worker Optimization**: Automatically uses fewer workers (2-4) with GPU acceleration to avoid resource contention
-- Automatic fallback to CPU if GPU is not available or fails to initialize
 
 ## System Requirements
 
 - **CPU**: Multi-core processor recommended
 - **Memory**: 2GB+ RAM recommended
 - **Storage**: Minimal disk space for key files
-- **GPU** (Optional): For acceleration:
-  - Apple Silicon (M1/M2/M3/M4): Built-in GPU with Metal support
-  - NVIDIA GPU: CUDA-compatible or OpenCL/Vulkan support
-  - AMD GPU: OpenCL/Vulkan support
 - **OS**: Windows, macOS, or Linux
 
 ## Troubleshooting
@@ -493,30 +420,11 @@ The key generator supports GPU acceleration for massive parallel key generation:
 6. **Progress bar not showing**
    - Ensure tqdm is installed: `pip install tqdm`
 
-7. **GPU acceleration not working**
-   - Run `python test_gpu.py` to check GPU detection
-   - Install appropriate GPU libraries: `pip install -r requirements.txt`
-   - Use `--cpu-only` to force CPU mode if GPU issues persist
+
 
 ## Testing
 
 The script includes several test functions to verify functionality:
-
-### GPU Acceleration Testing
-
-Test GPU detection and functionality:
-
-```bash
-python test_gpu.py
-```
-
-This will:
-- Check for available GPU libraries
-- Detect available GPUs on your system
-- Test GPU accelerator creation
-- Provide installation instructions if needed
-   - Progress bars are disabled in verbose mode (`--verbose`)
-   - For very long searches, progress bars may be indeterminate (no total shown)
 
 ### Getting Help
 
