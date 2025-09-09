@@ -10,7 +10,7 @@ Requirements:
     pip install psutil (optional, for health monitoring)
 
 KEY INSIGHT: MeshCore uses Ed25519 with custom scalar clamping!
-- PRV_KEY_SIZE = 64 (Ed25519 extended private key: [clamped_scalar][random_filler])
+- PRV_KEY_SIZE = 64 (Ed25519 extended private key: [clamped_scalar][sha512_prefix] per RFC 8032)
 - PUB_KEY_SIZE = 32 (Ed25519 public key)
 - Uses crypto_scalarmult_ed25519_base_noclamp with manually clamped scalars
 
@@ -350,7 +350,7 @@ class Ed25519KeyGenerator:
         2. SHA512 hash the seed
         3. Manually clamp the first 32 bytes (scalar clamping)
         4. Use crypto_scalarmult_ed25519_base_noclamp to get public key
-        5. Private key = [clamped_scalar][random_filler]
+        5. Private key = [clamped_scalar][sha512_prefix] per RFC 8032
         """
         # Step 1: Generate 32-byte random seed
         seed = random_bytes(32)
@@ -367,9 +367,9 @@ class Ed25519KeyGenerator:
         # Step 4: Use the clamped scalar to generate the public key
         public_key = crypto_scalarmult_ed25519_base_noclamp(bytes(clamped))
         
-        # Step 5: Create 64-byte private key [clamped_scalar][random_filler]
-        filler = random_bytes(32)
-        private_key = bytes(clamped) + filler
+        # Step 5: Create 64-byte private key [clamped_scalar][sha512_prefix]
+        # Per RFC 8032, the second 32 bytes should be SHA-512(seed)[32:64]
+        private_key = bytes(clamped) + digest[32:64]
         
         return public_key, private_key
     
@@ -930,8 +930,14 @@ def worker_process_batch(worker_id: int, config: VanityConfig, shared_state: Dic
                 # Convert target to bytes once and cache it
                 if not hasattr(config, '_target_bytes'):
                     config._target_bytes = bytes.fromhex(config.target_first_two)
-                main_pattern_match = (public_bytes[0] == config._target_bytes[0] and 
-                                    public_bytes[1] == config._target_bytes[1])
+                # Ensure we have exactly 2 bytes for the comparison
+                if len(config._target_bytes) == 2:
+                    main_pattern_match = (public_bytes[0] == config._target_bytes[0] and 
+                                        public_bytes[1] == config._target_bytes[1])
+                else:
+                    # Fall back to hex comparison if target is not exactly 2 bytes
+                    public_hex = public_bytes.hex()
+                    main_pattern_match = public_hex[:2] == config.target_first_two.upper()
                 
                 # Check for watchlist patterns (convert to hex for watchlist checking)
                 if config.watchlist_patterns:
@@ -1747,11 +1753,11 @@ def test_meshcore_compatibility():
                 # Show the key structure
                 private_bytes = bytes.fromhex(result.private_hex)
                 clamped_scalar = private_bytes[:32]
-                filler = private_bytes[32:]
+                sha512_prefix = private_bytes[32:]
                 
                 print(f"\nKey structure:")
                 print(f"Clamped scalar: {clamped_scalar.hex()}")
-                print(f"Random filler:  {filler.hex()}")
+                print(f"SHA512 prefix:  {sha512_prefix.hex()}")
                 
                 # Verify clamping
                 print(f"Clamping verification:")
@@ -2020,7 +2026,7 @@ def main():
     print("MESHCORE Ed25519 VANITY KEY GENERATOR")
     print("="*60)
     print("This version generates MeshCore-compatible Ed25519 keys")
-    print("Format: 64-byte private key [clamped_scalar][random_filler]")
+    print("Format: 64-byte private key [clamped_scalar][sha512_prefix] per RFC 8032")
     print("        32-byte public key from crypto_scalarmult_ed25519_base_noclamp")
     print("="*60)
     
