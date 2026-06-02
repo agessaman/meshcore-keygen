@@ -43,7 +43,6 @@ FFFFFFFF...FF|Reverse pattern - All F's ending with FF
 # Custom patterns you might want to try:
 # Replace with valid hex characters only (0-9, A-F)
 # Examples:
-# 2023...2023|Year 2023 pattern
+# 2026...2026|Year 2026 pattern
 # BEEF...CAFE|Beef and cafe pattern
-# FACE...BOOK|Face and book pattern
 # DEAD...BEEF|Dead and beef pattern
